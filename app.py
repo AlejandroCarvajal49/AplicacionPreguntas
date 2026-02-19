@@ -12,9 +12,9 @@ server = app.server  # Necesario para despliegue en AWS/Gunicorn
 navbar = dbc.NavbarSimple(
     children=[
         dbc.NavItem(dbc.NavLink("Inicio", href="/")),
-        dbc.NavItem(dbc.NavLink("Pregunta 1", href="/pregunta-1")),
-        dbc.NavItem(dbc.NavLink("Pregunta 2", href="/pregunta-2")),
-        dbc.NavItem(dbc.NavLink("Pregunta 3", href="/pregunta-3")),
+        dbc.NavItem(dbc.NavLink("Pregunta 1", href="/pregunta_1")),
+        dbc.NavItem(dbc.NavLink("Pregunta 2", href="/pregunta_2")),
+        dbc.NavItem(dbc.NavLink("Pregunta 3", href="/pregunta_3")),
     ],
     brand="Analítica Saber 11",
     brand_href="/",
