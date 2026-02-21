@@ -1,11 +1,16 @@
 import pandas as pd
 import plotly.express as px
 import statsmodels.api as sm
+import json
+from urllib.request import urlopen
+from urllib.error import URLError, HTTPError
+import numpy as np
 
 def cargar_datos_p3():
-    df = pd.read_csv('Data\saber11_Antioquia_clean.csv', dtype={'cole_cod_mcpio_ubicacion': str})
+    df = pd.read_csv('Data/saber11_Antioquia_clean.csv', dtype={'cole_cod_mcpio_ubicacion': str})
     df['cole_mcpio_ubicacion'] = df['cole_mcpio_ubicacion'].str.upper().str.strip()
     
+    # Ingeniería de características: Acceso TIC
     df['Acceso_TIC'] = df.apply(
         lambda x: 'Internet y Computador' if x['fami_tieneinternet'] == 'Si' and x['fami_tienecomputador'] == 'Si'
         else ('Solo Internet' if x['fami_tieneinternet'] == 'Si'
@@ -20,29 +25,27 @@ def obtener_lista_municipios(df):
     return ['TODOS'] + municipios
 
 def generar_mapa_antioquia(df, municipio):
+    # Ahora generamos un barplot de ranking por municipio (no filtrado por selección)
     dff = df.copy()
-    
-    # Formateo estricto para cruce topológico GeoJSON
-    dff['cole_cod_mcpio_ubicacion'] = dff['cole_cod_mcpio_ubicacion'].astype(str).str.replace('.0', '', regex=False).str.zfill(5)
-    
-    if municipio != 'TODOS':
-        dff = dff[dff['cole_mcpio_ubicacion'] == municipio]
+    dff = dff.dropna(subset=['cole_cod_mcpio_ubicacion'])
+    # Normalizar código municipal (eliminar caracteres no numéricos y rellenar a 5 dígitos)
+    dff['MPIO_ID'] = dff['cole_cod_mcpio_ubicacion'].astype(str).str.replace(r'[^0-9]', '', regex=True).str.zfill(5)
 
-    df_mapa = dff.groupby(['cole_cod_mcpio_ubicacion', 'cole_mcpio_ubicacion'])['punt_ingles'].mean().reset_index()
-    url_geojson = "https://raw.githubusercontent.com/mcd-unab/DANE-geo/master/json/MPIO.json"
-    
-    fig = px.choropleth(
-        df_mapa,
-        geojson=url_geojson,
-        locations='cole_cod_mcpio_ubicacion',
-        featureidkey='properties.MPIO_CCNCT',
-        color='punt_ingles',
-        hover_name='cole_mcpio_ubicacion',
-        color_continuous_scale='Viridis',
-        title=f'Promedio de Puntaje en Inglés ({municipio})'
+    # Agrupar por municipio y calcular promedio de puntaje en inglés
+    df_rank = dff.groupby(['MPIO_ID', 'cole_mcpio_ubicacion'], as_index=False)['punt_ingles'].mean()
+    df_rank = df_rank.sort_values('punt_ingles', ascending=False)
+
+    # Crear figura de barras horizontal (ranking)
+    fig = px.bar(
+        df_rank,
+        x='punt_ingles',
+        y='cole_mcpio_ubicacion',
+        orientation='h',
+        hover_data={'MPIO_ID': True, 'punt_ingles': ':.2f'},
+        labels={'punt_ingles': 'Promedio Puntaje Inglés', 'cole_mcpio_ubicacion': 'Municipio'},
+        title='Ranking de Municipios por Promedio de Puntaje en Inglés (Antioquia)'
     )
-    fig.update_geos(fitbounds="locations", visible=False)
-    fig.update_layout(margin={"r":0,"t":40,"l":0,"b":0})
+    fig.update_layout(yaxis={'categoryorder':'total ascending'}, margin={"r":0,"t":40,"l":0,"b":0}, height=900)
     return fig
 
 def generar_histograma_tic(df, municipio):

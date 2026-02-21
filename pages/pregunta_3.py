@@ -32,13 +32,6 @@ layout = dbc.Container([
         ], md=4)
     ]),
     
-    dbc.Row([
-        dbc.Col([
-            dbc.Card([
-                dbc.CardBody([dcc.Graph(id='grafica-mapa')])
-            ], className="mb-4 shadow-sm")
-        ], md=12)
-    ]),
     
     dbc.Row([
         dbc.Col([
@@ -52,17 +45,26 @@ layout = dbc.Container([
                 dbc.CardBody([dcc.Graph(id='grafica-dispersion')])
             ], className="mb-4 shadow-sm")
         ], md=6)
+    ]),
+    dbc.Row([
+        dbc.Col([
+            dbc.Card([
+                dbc.CardBody([dcc.Graph(id='grafica-ranking')])
+            ], className="mb-4 shadow-sm")
+        ], md=12)
     ])
 ], fluid=True)
 
 @callback(
-    [Output('grafica-mapa', 'figure'),
+    [Output('grafica-ranking', 'figure'),
      Output('grafica-histograma', 'figure'),
      Output('grafica-dispersion', 'figure')],
     [Input('filtro-municipio', 'value')]
 )
 def actualizar_tablero(municipio_seleccionado):
-    mapa = generar_mapa_antioquia(df_p3, municipio_seleccionado)
+    # El ranking es global (no depende de la selección), pero mantenemos el filtro disponible para
+    # las otras visualizaciones. Llamamos a la función existente que ahora devuelve el barplot.
+    ranking = generar_mapa_antioquia(df_p3, municipio_seleccionado)
     histograma = generar_histograma_tic(df_p3, municipio_seleccionado)
     dispersion = generar_dispersion_regresion(df_p3, municipio_seleccionado)
-    return mapa, histograma, dispersion
+    return ranking, histograma, dispersion

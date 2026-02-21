@@ -16,7 +16,7 @@ navbar = dbc.NavbarSimple(
         dbc.NavItem(dbc.NavLink("Pregunta 2", href="/pregunta_2")),
         dbc.NavItem(dbc.NavLink("Pregunta 3", href="/pregunta_3")),
     ],
-    brand="Analítica Saber 11",
+    brand="Analítica Saber 11 - Antioquia",
     brand_href="/",
     color="primary",
     dark=True,
