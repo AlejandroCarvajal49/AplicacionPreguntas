@@ -111,3 +111,51 @@ def generar_dispersion_regresion(df, municipio):
         labels={'punt_ingles': 'Puntaje Inglés', 'punt_global': 'Puntaje Global'}
     )
     return fig
+
+def generar_dispersion_clusters(df, municipio):
+    dff = df.copy()
+    if municipio != 'TODOS':
+        dff = dff[dff['cole_mcpio_ubicacion'] == municipio]
+
+    # Dicotomización estricta para clústeres rojo/verde
+    dff['Tiene_Internet'] = dff['fami_tieneinternet'].apply(
+        lambda x: 'Con Internet' if x == 'Si' else 'Sin Internet'
+    )
+
+    fig = px.scatter(
+        dff,
+        x='punt_ingles',
+        y='punt_global',
+        color='Tiene_Internet',
+        opacity=0.6,
+        marginal_x='box', # Añade visualización de densidad en los ejes
+        marginal_y='box',
+        title=f'Clusters de Desempeño: Con vs Sin Internet ({municipio})',
+        labels={'punt_ingles': 'Puntaje Inglés', 'punt_global': 'Puntaje Global'},
+        color_discrete_map={
+            'Con Internet': '#2ca02c', # Verde
+            'Sin Internet': '#d62728'  # Rojo
+        }
+    )
+    fig.update_traces(marker=dict(size=6, line=dict(width=0.5, color='DarkSlateGrey')))
+    fig.update_layout(margin={"r":0,"t":40,"l":0,"b":0})
+    return fig
+
+def calcular_probabilidad_b1(df, municipio):
+    dff = df.copy()
+    if municipio != 'TODOS':
+        dff = dff[dff['cole_mcpio_ubicacion'] == municipio]
+
+    con_internet = dff[dff['fami_tieneinternet'] == 'Si']
+    sin_internet = dff[dff['fami_tieneinternet'] == 'No']
+
+    if len(con_internet) == 0 or len(sin_internet) == 0:
+        return 0.0
+
+    # Cálculo de probabilidad marginal P(B1 U B+ | Internet)
+    prob_con = len(con_internet[con_internet['desemp_ingles'].isin(['B1', 'B+'])]) / len(con_internet) * 100
+    prob_sin = len(sin_internet[sin_internet['desemp_ingles'].isin(['B1', 'B+'])]) / len(sin_internet) * 100
+
+    # Diferencial de probabilidad (Z%)
+    diferencia_z = prob_con - prob_sin
+    return round(diferencia_z, 2)

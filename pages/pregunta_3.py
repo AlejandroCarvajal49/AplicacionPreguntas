@@ -6,7 +6,8 @@ from Analysis.logica_p3 import (
     generar_mapa_antioquia, 
     generar_ranking_municipios_estatico,
     generar_histograma_tic, 
-    generar_dispersion_regresion, 
+    generar_dispersion_clusters,
+    calcular_probabilidad_b1,
     obtener_lista_municipios
 )
 
@@ -50,7 +51,10 @@ layout = dbc.Container([
         
         dbc.Col([
             dbc.Card([
-                dbc.CardBody([dcc.Graph(id='grafica-dispersion')])
+                dbc.CardBody([
+                    html.H5(id='texto-probabilidad', className="text-center text-primary mb-3 fw-bold"),
+                    dcc.Graph(id='grafica-dispersion')
+                ])
             ], className="mb-4 shadow-sm")
         ], md=6)
     ]),
@@ -67,11 +71,16 @@ layout = dbc.Container([
 @callback(
     [Output('grafica-mapa', 'figure'),
      Output('grafica-histograma', 'figure'),
-     Output('grafica-dispersion', 'figure')],
+     Output('grafica-dispersion', 'figure'),
+     Output('texto-probabilidad', 'children')],
     [Input('filtro-municipio', 'value')]
 )
 def actualizar_tablero(municipio_seleccionado):
     mapa = generar_mapa_antioquia(df_p3, municipio_seleccionado)
     histograma = generar_histograma_tic(df_p3, municipio_seleccionado)
-    dispersion = generar_dispersion_regresion(df_p3, municipio_seleccionado)
-    return mapa, histograma, dispersion
+    dispersion = generar_dispersion_clusters(df_p3, municipio_seleccionado)
+    
+    probabilidad_z = calcular_probabilidad_b1(df_p3, municipio_seleccionado)
+    texto_insight = f"Insight: El acceso a internet altera la probabilidad de alcanzar nivel B1/B+ en un {probabilidad_z}%"
+    
+    return mapa, histograma, dispersion, texto_insight
