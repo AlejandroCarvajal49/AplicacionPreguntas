@@ -1,98 +1,93 @@
 import dash
 from dash import html, dcc, callback, Input, Output
 import dash_bootstrap_components as dbc
-import pandas as pd
-from Analysis.logica_p1 import analizar_brecha_rural_urbana, generar_reporte_p1
+from Analysis.logica_p1 import (
+    cargar_datos_p1,
+    obtener_lista_municipios_p1,
+    generar_boxplot_brecha,
+    generar_dispersion_pib_brecha,
+    calcular_estadisticas_brecha
+)
 
-# Registrar página
-dash.register_page(__name__, path='/pregunta1', name="Pregunta 1")
+dash.register_page(__name__, path='/pregunta_1', name="Brecha Urbano/Rural")
 
-# Variable global para almacenar datos y resultados
-datos_cargados = None
-resultados_analisis = None
+# Carga de datos y gráficas estáticas
+df_p1 = cargar_datos_p1()
+lista_municipios = obtener_lista_municipios_p1(df_p1)
+grafica_pib_estatica = generar_dispersion_pib_brecha(df_p1)
 
 layout = dbc.Container([
-    dbc.Row([
-        dbc.Col([
-            html.H1("¿Existe brecha en desempeño Rural vs Urbana?", className="text-center my-4")
-        ])
-    ]),
+    # Encabezado y Contexto
+    html.H2("Pregunta 1: Brecha de Desempeño Urbano vs. Rural", className="my-4 fw-bold"),
+    dbc.Alert(
+        "Contexto del Ministerio: Identificar brechas críticas de desempeño entre zonas urbanas y rurales para focalizar recursos y programas de nivelación en municipios de menor PIB.",
+        color="info",
+        className="shadow-sm"
+    ),
+    html.Hr(),
     
+    # Filtro
     dbc.Row([
         dbc.Col([
-            dcc.Upload(
-                id='upload-data-p1',
-                children=dbc.Button("Cargar CSV", color="primary", className="w-100"),
-                multiple=False,
+            html.Label("Focalizar Análisis por Municipio:", className="fw-bold"),
+            dcc.Dropdown(
+                id='filtro-municipio-p1',
+                options=[{'label': m, 'value': m} for m in lista_municipios],
+                value='TODOS',
+                clearable=False,
+                className="mb-3 shadow-sm"
             )
-        ], md=6),
-        dbc.Col([
-            dbc.Button("🔍 Ejecutar Análisis", id='btn-analisis-p1', color="success", className="w-100")
-        ], md=6)
-    ], className="mb-4"),
-    
-    dbc.Row([
-        dbc.Col([
-            html.Div(id='output-analisis-p1')
-        ])
+        ], md=4)
     ]),
     
-    dcc.Store(id='store-datos-p1'),
-    dcc.Store(id='store-resultados-p1')
+    # Tarjeta de Insights y Estadísticas
+    dbc.Row([
+        dbc.Col([
+            dbc.Card([
+                dbc.CardBody([
+                    html.H5("Hallazgos e Insights (Prueba T-Student)", className="card-title text-success fw-bold"),
+                    html.P(id='texto-insight-p1', className="card-text fs-5")
+                ])
+            ], className="mb-4 shadow-sm border-success")
+        ], md=12)
+    ]),
+    
+    # Gráficos
+    dbc.Row([
+        dbc.Col([
+            dbc.Card([
+                dbc.CardHeader("Comparación de Distribución (Urbano vs Rural)", className="fw-bold bg-light"),
+                dbc.CardBody([dcc.Graph(id='grafica-boxplot-p1')])
+            ], className="mb-4 shadow-sm")
+        ], md=6),
+        
+        dbc.Col([
+            dbc.Card([
+                dbc.CardHeader("Impacto del PIB en la Brecha Educativa", className="fw-bold bg-light"),
+                dbc.CardBody([
+                    dcc.Graph(figure=grafica_pib_estatica),
+                    html.Small(
+                        "Nota: Valores positivos en Y indican ventaja urbana. Muestra si los municipios más pobres sufren brechas más grandes.", 
+                        className="text-muted text-center d-block mt-2"
+                    )
+                ])
+            ], className="mb-4 shadow-sm")
+        ], md=6)
+    ])
 ], fluid=True)
 
 
+# Callbacks para actualizar la página según el filtro
 @callback(
-    Output('store-datos-p1', 'data'),
-    Input('upload-data-p1', 'contents'),
-    prevent_initial_call=True
+    [Output('grafica-boxplot-p1', 'figure'),
+     Output('texto-insight-p1', 'children')],
+    [Input('filtro-municipio-p1', 'value')]
 )
-def cargar_datos(contents):
-    if contents is None:
-        return None
+def actualizar_tablero_p1(municipio_seleccionado):
+    # Actualizar el boxplot
+    boxplot = generar_boxplot_brecha(df_p1, municipio_seleccionado)
     
-    import base64
-    import io
+    # Actualizar el texto del insight con los cálculos de T-test
+    texto_insight = calcular_estadisticas_brecha(df_p1, municipio_seleccionado)
     
-    content_type, content_string = contents.split(',')
-    decoded = base64.b64decode(content_string)
-    df = pd.read_csv(io.StringIO(decoded.decode('utf-8')))
-    
-    return df.to_json(date_format='iso', orient='split')
-
-
-@callback(
-    [Output('store-resultados-p1', 'data'),
-     Output('output-analisis-p1', 'children')],
-    Input('btn-analisis-p1', 'n_clicks'),
-    Input('store-datos-p1', 'data'),
-    prevent_initial_call=True
-)
-def ejecutar_analisis(n_clicks, datos_json):
-    if not datos_json or not n_clicks:
-        return None, html.Div("Cargue datos primero", className="alert alert-warning")
-    
-    
-    df = pd.read_json(datos_json, orient='split')
-    resultados = analizar_brecha_rural_urbana(df)
-    reporte = generar_reporte_p1(resultados)
-        
-    # Retornar datos para store y visualización
-    salida = dbc.Container([
-           dbc.Row([
-                dbc.Col([
-                    dcc.Graph(figure=resultados['fig_global'])
-                ], md=6),
-                dbc.Col([
-                    dcc.Graph(figure=resultados['fig_por_dept']) if resultados['fig_por_dept'] else html.Div()
-                ], md=6)
-            ], className="mb-4"),
-            
-            dbc.Row([
-                dbc.Col([
-                    html.Pre(reporte, className="bg-light p-3 rounded", style={"fontSize": "12px"})
-                ])
-            ]),
-        ])
-        
-    return resultados, salida
+    return boxplot, texto_insight
