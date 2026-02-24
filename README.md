@@ -81,3 +81,5 @@ Accesibilidad: IP Pública configurada en el puerto 8050.
 	- `pregunta_2.py`: Página interactiva para la pregunta 2.
 	- `pregunta_3.py`: Página interactiva para la pregunta 3.
 	- `__pycache__/`: Caché de páginas compiladas.
+
+FIN
