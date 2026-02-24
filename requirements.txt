@@ -2,3 +2,5 @@ dash
 pandas
 plotly
 dash-bootstrap-components
+scipy
+statsmodels
