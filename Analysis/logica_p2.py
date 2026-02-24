@@ -1,26 +1,31 @@
 import pandas as pd
 import plotly.express as px
 
+# Grafica 1: Desempeño por área (Matemáticas, Lectura Crítica, Ciencias Naturales) según tipo de colegio (Público vs Privado) y municipio.
 
-def analizar_publico_vs_privado():
-    
-    # 1. Cargar datos
+def obtener_datos():
     df = pd.read_csv("data/saber11_Antioquia_clean.csv")
     
-    # 2. Limpiar variable cole_naturaleza
+    # Limpiar naturaleza
     df["cole_naturaleza"] = df["cole_naturaleza"].astype(str).str.lower()
     
     df = df[df["cole_naturaleza"].isin(["oficial", "no oficial"])]
     
     df["cole_naturaleza"] = df["cole_naturaleza"].replace({
-        "oficial": "Oficial",
+        "oficial": "Público",
         "no oficial": "Privado"
     })
     
-    # =========================
-    # GRÁFICO 1: GENERAL
-    # =========================
+    return df
+
+
+def generar_grafica(df, municipio=None):
     
+    # Filtrar por municipio
+    if municipio and municipio != "Todos":
+        df = df[df["cole_mcpio_ubicacion"] == municipio]
+    
+    # Formato largo
     df_melt = df.melt(
         id_vars=["cole_naturaleza"],
         value_vars=[
@@ -32,51 +37,31 @@ def analizar_publico_vs_privado():
         value_name="puntaje"
     )
     
+    # Renombrar materias (más bonito)
+    df_melt["materia"] = df_melt["materia"].replace({
+        "punt_matematicas": "Matemáticas",
+        "punt_lectura_critica": "Lectura Crítica",
+        "punt_c_naturales": "Ciencias Naturales"
+    })
+    
+    # Promedios
     resumen = df_melt.groupby(
         ["cole_naturaleza", "materia"]
     )["puntaje"].mean().reset_index()
     
+    # Gráfico
     fig = px.bar(
         resumen,
         x="materia",
         y="puntaje",
         color="cole_naturaleza",
         barmode="group",
-        title="Comparación de desempeño por área: Público vs Privado"
+        title=f"Desempeño por área - {municipio if municipio else 'Todos'}",
+        labels={
+            "cole_naturaleza": "Tipo de colegio",
+            "materia": "Área",
+            "puntaje": "Puntaje promedio"
+        }
     )
     
-    # =========================
-    # GRÁFICO 2: POR ESTRATO
-    # =========================
-    
-    df = df[df["fami_estratovivienda"].notna()]
-    
-    df_melt_estrato = df.melt(
-        id_vars=["cole_naturaleza", "fami_estratovivienda"],
-        value_vars=[
-            "punt_matematicas",
-            "punt_lectura_critica",
-            "punt_c_naturales"
-        ],
-        var_name="materia",
-        value_name="puntaje"
-    )
-    
-    resumen_estrato = df_melt_estrato.groupby(
-        ["cole_naturaleza", "materia", "fami_estratovivienda"]
-    )["puntaje"].mean().reset_index()
-    
-    fig_estrato = px.bar(
-        resumen_estrato,
-        x="materia",
-        y="puntaje",
-        color="cole_naturaleza",
-        barmode="group",
-        facet_col="fami_estratovivienda",
-        title="Comparación por área controlando por estrato"
-    )
-    
-    return {
-        "fig": fig,
-        "fig_estrato": fig_estrato
-    }
+    return fig
