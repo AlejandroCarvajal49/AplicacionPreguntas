@@ -22,6 +22,11 @@ layout = dbc.Container([
     html.H2("Insights Generales - Exploración y Análisis", className="my-4"),
     html.Hr(),
 
+    # Serie temporal - aparecer primero (puntaje global)
+    dbc.Row([
+        dbc.Col(dbc.Card(dbc.CardBody([dcc.Graph(figure=figs.get('serie_punt_global_por_periodo'))])), md=12)
+    ], className="mb-4"),
+
     # KPIs en la parte superior
     dbc.Row([
         _kpi_card("Máximo puntaje global", round(kp.get("max_punt_global", 0), 2) if kp.get("max_punt_global") is not None else "N/A"),

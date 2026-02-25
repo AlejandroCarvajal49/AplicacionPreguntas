@@ -143,6 +143,26 @@ def obtener_figuras_eda(path="Data/saber11_Antioquia_clean.csv"):
     if col_genero:
         figs["pie_genero"] = px.pie(df, names=col_genero, title="Distribución por Género")
 
+    # Serie temporal: promedio de puntajes generales por año (sin separar por TIC)
+    if col_punt_global and 'periodo' in df.columns:
+        try:
+            df['year'] = df['periodo'].astype(str).str[:4]
+            df = df[df['year'].str.isnumeric()]
+            df['year'] = df['year'].astype(int)
+            serie_df = df.groupby('year')[col_punt_global].mean().reset_index().sort_values('year')
+            figs['serie_punt_global_por_periodo'] = px.line(
+                serie_df,
+                x='year',
+                y=col_punt_global,
+                markers=True,
+                title='Progresión Promedio del Puntaje Global a través de los Años',
+                labels={col_punt_global: 'Promedio Puntaje Global', 'year': 'Año'}
+            )
+        except Exception:
+            figs['serie_punt_global_por_periodo'] = go.Figure()
+    else:
+        figs['serie_punt_global_por_periodo'] = go.Figure()
+
     # Retornar KPIs y figuras
     # También construir información auxiliar para callbacks interactivos
     aux = {

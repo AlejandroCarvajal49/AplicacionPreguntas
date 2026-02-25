@@ -8,6 +8,7 @@ from Analysis.logica_p3 import (
     generar_histograma_tic, 
     generar_dispersion_clusters,
     calcular_probabilidad_b1,
+    generar_serie_tic_ingles_por_periodo,
     obtener_lista_municipios
 )
 
@@ -66,13 +67,21 @@ layout = dbc.Container([
             ], className="mb-4 shadow-sm")
         ], md=12)
     ])
+
+    ,
+
+    # Serie temporal (última en esta página)
+    dbc.Row([
+        dbc.Col(dbc.Card(dbc.CardBody([dcc.Graph(id='grafica-tiempo')])), md=12)
+    ], className="mb-4")
 ], fluid=True)
 
 @callback(
     [Output('grafica-mapa', 'figure'),
      Output('grafica-histograma', 'figure'),
      Output('grafica-dispersion', 'figure'),
-     Output('texto-probabilidad', 'children')],
+     Output('texto-probabilidad', 'children'),
+     Output('grafica-tiempo', 'figure')],
     [Input('filtro-municipio', 'value')]
 )
 def actualizar_tablero(municipio_seleccionado):
@@ -82,5 +91,7 @@ def actualizar_tablero(municipio_seleccionado):
     
     probabilidad_z = calcular_probabilidad_b1(df_p3, municipio_seleccionado)
     texto_insight = f"Insight: El acceso a internet altera la probabilidad de alcanzar nivel B1/B+ en un {probabilidad_z}%"
-    
-    return mapa, histograma, dispersion, texto_insight
+    # Serie temporal (por acceso TIC)
+    serie = generar_serie_tic_ingles_por_periodo(df_p3, municipio_seleccionado)
+
+    return mapa, histograma, dispersion, texto_insight, serie
