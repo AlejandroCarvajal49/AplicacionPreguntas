@@ -1,52 +1,76 @@
 import dash
 from dash import html, dcc, Input, Output
-from Analysis.logica_p2 import (
-    obtener_datos,
-    generar_grafica,
-    generar_boxplot,
-    generar_brecha
-)
+import pandas as pd
+
+from Analysis.logica_p2 import cargar_datos, generar_boxplot_brecha
 
 dash.register_page(__name__, path="/pregunta_2")
 
-df = obtener_datos()
+# =========================
+# CARGAR DATA
+# =========================
+df = cargar_datos()
 
-municipios = sorted(df["cole_mcpio_ubicacion"].dropna().unique())
+municipios = ["Todos"] + sorted(df["cole_municipio"].dropna().unique())
 
+# Slider años (si existe)
+if "periodo" in df.columns:
+    min_year = int(df["periodo"].min())
+    max_year = int(df["periodo"].max())
+else:
+    min_year, max_year = 2010, 2020
+
+
+# =========================
+# LAYOUT
+# =========================
 layout = html.Div([
 
-    html.H1("Pregunta 2: Público vs Privado"),
+    html.H2("PREGUNTA 2: PÚBLICO VS PRIVADO"),
 
+    # FILTRO MUNICIPIO
     html.Label("Selecciona un municipio:"),
-
     dcc.Dropdown(
         id="dropdown-municipio",
-        options=[{"label": "Todos", "value": "Todos"}] +
-                [{"label": m, "value": m} for m in municipios],
+        options=[{"label": m, "value": m} for m in municipios],
         value="Todos"
     ),
 
-    html.H3("Comparación de desempeño promedio"),
-    dcc.Graph(id="grafica-municipio"),
+    html.Br(),
 
-    html.H3("Distribución de puntajes (Boxplot)"),
-    dcc.Graph(id="grafica-boxplot"),
+    # FILTRO AÑOS
+    html.Label("Selecciona rango de años:"),
+    dcc.RangeSlider(
+        id="slider-anios",
+        min=min_year,
+        max=max_year,
+        step=1,
+        value=[min_year, max_year],
+        marks={i: str(i) for i in range(min_year, max_year + 1)}
+    ),
 
-    html.H3("Brecha de desempeño (Privado - Público)"),
-    dcc.Graph(id="grafica-brecha")
+    html.Br(),
+
+    # GRAFICA
+    dcc.Graph(id="grafica-boxplot-brecha")
+
 ])
 
 
+# =========================
+# CALLBACK
+# =========================
 @dash.callback(
-    Output("grafica-municipio", "figure"),
-    Output("grafica-boxplot", "figure"),
-    Output("grafica-brecha", "figure"),
-    Input("dropdown-municipio", "value")
+    Output("grafica-boxplot-brecha", "figure"),
+    Input("dropdown-municipio", "value"),
+    Input("slider-anios", "value")
 )
-def actualizar_graficas(municipio):
+def actualizar_grafica(municipio, rango_anios):
 
-    fig1 = generar_grafica(df, municipio)
-    fig2 = generar_boxplot(df, municipio)
-    fig3 = generar_brecha(df, municipio)
+    fig = generar_boxplot_brecha(
+        df,
+        municipio=municipio,
+        rango_anios=rango_anios
+    )
 
-    return fig1, fig2, fig3
+    return fig

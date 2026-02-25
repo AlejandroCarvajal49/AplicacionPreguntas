@@ -1,155 +1,106 @@
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 
 
-def obtener_datos():
-    df = pd.read_csv("data/saber11_Antioquia_clean.csv")
+# =========================
+# CARGAR DATOS
+# =========================
+def cargar_datos(path="data/icfes_antioquia.csv"):
+    df = pd.read_csv(path)
+    return df
 
-    # Limpiar naturaleza
-    df["cole_naturaleza"] = df["cole_naturaleza"].astype(str).str.lower()
-    df = df[df["cole_naturaleza"].isin(["oficial", "no oficial"])]
 
-    df["cole_naturaleza"] = df["cole_naturaleza"].replace({
+# =========================
+# LIMPIAR VARIABLES CLAVE
+# =========================
+def preparar_datos(df):
+    df = df.copy()
+
+    # Normalizar nombres de colegio
+    df["tipo_colegio"] = df["cole_naturaleza"].replace({
+        "OFICIAL": "Público",
+        "Oficial": "Público",
         "oficial": "Público",
-        "no oficial": "Privado"
+        "PRIVADO": "Privado",
+        "Privado": "Privado",
+        "privado": "Privado"
     })
 
     return df
 
 
-# 🎨 Colores consistentes (como tu gráfica 1)
-COLORES = {
-    "Público": "#1f77b4",   # azul
-    "Privado": "#d62728"    # rojo
-}
+# =========================
+# GRAFICA PRINCIPAL (BOXPLOT + BRECHA)
+# =========================
+def generar_boxplot_brecha(df, municipio=None, rango_anios=None):
+    
+    df = preparar_datos(df)
 
+    # FILTRO MUNICIPIO
+    if municipio and municipio != "Todos":
+        df = df[df["cole_municipio"] == municipio]
 
-def _preparar_long(df):
-    """Convierte a formato largo y renombra materias."""
-    df_melt = df.melt(
-        id_vars=["cole_naturaleza"],
-        value_vars=[
-            "punt_matematicas",
-            "punt_lectura_critica",
-            "punt_c_naturales"
-        ],
+    # FILTRO AÑOS (si existe columna)
+    if rango_anios and "periodo" in df.columns:
+        df = df[df["periodo"].between(rango_anios[0], rango_anios[1])]
+
+    materias = {
+        "punt_matematicas": "Matemáticas",
+        "punt_lectura_critica": "Lectura Crítica",
+        "punt_c_naturales": "Ciencias Naturales"
+    }
+
+    df_long = df.melt(
+        id_vars=["tipo_colegio"],
+        value_vars=list(materias.keys()),
         var_name="materia",
         value_name="puntaje"
     )
 
-    df_melt["materia"] = df_melt["materia"].replace({
-        "punt_matematicas": "Matemáticas",
-        "punt_lectura_critica": "Lectura Crítica",
-        "punt_c_naturales": "Ciencias Naturales"
-    })
+    df_long["materia"] = df_long["materia"].map(materias)
 
-    return df_melt
-
-
-def generar_grafica(df, municipio=None):
-
-    # Filtrar por municipio
-    if municipio and municipio != "Todos":
-        df = df[df["cole_mcpio_ubicacion"] == municipio]
-
-    df_melt = _preparar_long(df)
-
-    resumen = df_melt.groupby(
-        ["cole_naturaleza", "materia"]
-    )["puntaje"].mean().reset_index()
-
-    fig = px.bar(
-        resumen,
+    # =========================
+    # BOXPLOT
+    # =========================
+    fig = px.box(
+        df_long,
         x="materia",
         y="puntaje",
-        color="cole_naturaleza",
-        color_discrete_map=COLORES,
-        barmode="group",
-        title=f"Desempeño por área - {municipio if municipio else 'Todos'}",
-        labels={
-            "cole_naturaleza": "Tipo de colegio",
-            "materia": "Área",
-            "puntaje": "Puntaje promedio"
-        }
+        color="tipo_colegio",
+        color_discrete_map={
+            "Público": "blue",
+            "Privado": "red"
+        },
+        points="outliers",
+        title="Distribución + Brecha (Privado vs Público)"
     )
+
+    # =========================
+    # CALCULO DE BRECHA
+    # =========================
+    pivot = df_long.groupby(["materia", "tipo_colegio"])["puntaje"].mean().unstack()
+
+    # 👉 MANEJO SEGURO (CLAVE DEL ERROR)
+    pivot["Público"] = pivot.get("Público", 0)
+    pivot["Privado"] = pivot.get("Privado", 0)
+
+    pivot["brecha"] = pivot["Privado"] - pivot["Público"]
+
+    # Si no hay datos suficientes
+    if pivot["brecha"].isna().all():
+        return px.box(title="No hay datos suficientes para comparar")
+
+    # =========================
+    # ANOTAR BRECHA EN GRAFICA
+    # =========================
+    for i, materia in enumerate(pivot.index):
+        fig.add_annotation(
+            x=materia,
+            y=max(df_long["puntaje"]),
+            text=f"Brecha: {pivot.loc[materia, 'brecha']:.2f}",
+            showarrow=False,
+            font=dict(size=12, color="black")
+        )
 
     return fig
-
-
-def generar_boxplot(df, municipio=None):
-
-    # Filtrar por municipio
-    if municipio and municipio != "Todos":
-        df = df[df["cole_mcpio_ubicacion"] == municipio]
-
-    df_melt = _preparar_long(df)
-
-    fig_box = px.box(
-        df_melt,
-        x="materia",
-        y="puntaje",
-        color="cole_naturaleza",
-        color_discrete_map=COLORES,
-        title=f"Distribución de puntajes - {municipio if municipio else 'Todos'}",
-        labels={
-            "cole_naturaleza": "Tipo de colegio",
-            "materia": "Área",
-            "puntaje": "Puntaje"
-        }
-    )
-
-    return fig_box
-
-def generar_brecha(df, municipio=None):
-
-    # Filtrar por municipio
-    if municipio and municipio != "Todos":
-        df = df[df["cole_mcpio_ubicacion"] == municipio]
-
-    # Formato largo
-    df_melt = df.melt(
-        id_vars=["cole_naturaleza"],
-        value_vars=[
-            "punt_matematicas",
-            "punt_lectura_critica",
-            "punt_c_naturales"
-        ],
-        var_name="materia",
-        value_name="puntaje"
-    )
-
-    # Renombrar materias
-    df_melt["materia"] = df_melt["materia"].replace({
-        "punt_matematicas": "Matemáticas",
-        "punt_lectura_critica": "Lectura Crítica",
-        "punt_c_naturales": "Ciencias Naturales"
-    })
-
-    # Promedios
-    resumen = df_melt.groupby(
-        ["cole_naturaleza", "materia"]
-    )["puntaje"].mean().reset_index()
-
-    # Convertir a formato ancho
-    pivot = resumen.pivot(
-        index="materia",
-        columns="cole_naturaleza",
-        values="puntaje"
-    ).reset_index()
-
-    # Calcular brecha
-    pivot["Brecha (Privado - Público)"] = pivot["Privado"] - pivot["Público"]
-
-    # Gráfico
-    fig_gap = px.bar(
-        pivot,
-        x="materia",
-        y="Brecha (Privado - Público)",
-        title=f"Brecha de desempeño - {municipio if municipio else 'Todos'}",
-        labels={
-            "materia": "Área",
-            "Brecha (Privado - Público)": "Diferencia de puntaje"
-        }
-    )
-
-    return fig_gap
