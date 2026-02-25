@@ -6,7 +6,9 @@ from Analysis.logica_p1 import (
     obtener_lista_municipios_p1,
     generar_boxplot_brecha,
     generar_dispersion_pib_brecha,
-    calcular_estadisticas_brecha
+    calcular_estadisticas_brecha,
+    generar_barras_brecha_error,
+    generar_mapa_pib_puntaje # <-- IMPORTAMOS LA NUEVA FUNCIÓN
 )
 
 dash.register_page(__name__, path='/pregunta_1', name="Brecha Urbano/Rural")
@@ -51,8 +53,17 @@ layout = dbc.Container([
             ], className="mb-4 shadow-sm border-success")
         ], md=12)
     ]),
+
+    # NUEVA FILA: Mapa Interactivo
+    dbc.Row([
+        dbc.Col([
+            dbc.Card([
+                dbc.CardBody([dcc.Graph(id='grafica-mapa-p1')])
+            ], className="mb-4 shadow-sm")
+        ], md=12)
+    ]),
     
-    # Gráficos
+    # Fila: Boxplot y Gráfico de Barras con Error
     dbc.Row([
         dbc.Col([
             dbc.Card([
@@ -63,7 +74,23 @@ layout = dbc.Container([
         
         dbc.Col([
             dbc.Card([
-                dbc.CardHeader("Impacto del PIB en la Brecha Educativa", className="fw-bold bg-light"),
+                dbc.CardHeader("Promedios con Desviación Estándar", className="fw-bold bg-light"),
+                dbc.CardBody([
+                    dcc.Graph(id='grafica-barras-error-p1'),
+                    html.Small(
+                        "Nota: Las líneas sobre las barras indican la variabilidad de los datos (Desviación Estándar).", 
+                        className="text-muted text-center d-block mt-2"
+                    )
+                ])
+            ], className="mb-4 shadow-sm")
+        ], md=6)
+    ]),
+
+    # Fila: Dispersión del PIB
+    dbc.Row([
+        dbc.Col([
+            dbc.Card([
+                dbc.CardHeader("Impacto del PIB en la Brecha Educativa (Global Departamental)", className="fw-bold bg-light"),
                 dbc.CardBody([
                     dcc.Graph(figure=grafica_pib_estatica),
                     html.Small(
@@ -72,22 +99,23 @@ layout = dbc.Container([
                     )
                 ])
             ], className="mb-4 shadow-sm")
-        ], md=6)
+        ], md=12)
     ])
 ], fluid=True)
 
 
-# Callbacks para actualizar la página según el filtro
+# Callback actualizado para incluir el mapa
 @callback(
     [Output('grafica-boxplot-p1', 'figure'),
+     Output('grafica-barras-error-p1', 'figure'),
+     Output('grafica-mapa-p1', 'figure'), # <-- NUEVO OUTPUT PARA EL MAPA
      Output('texto-insight-p1', 'children')],
     [Input('filtro-municipio-p1', 'value')]
 )
 def actualizar_tablero_p1(municipio_seleccionado):
-    # Actualizar el boxplot
     boxplot = generar_boxplot_brecha(df_p1, municipio_seleccionado)
-    
-    # Actualizar el texto del insight con los cálculos de T-test
+    barras_error = generar_barras_brecha_error(df_p1, municipio_seleccionado)
+    mapa = generar_mapa_pib_puntaje(df_p1, municipio_seleccionado) # <-- GENERAR EL MAPA
     texto_insight = calcular_estadisticas_brecha(df_p1, municipio_seleccionado)
     
-    return boxplot, texto_insight
+    return boxplot, barras_error, mapa, texto_insight
