@@ -21,34 +21,63 @@ def cargar_datos(path="data/saber11_Antioquia_clean.csv"):
     return df
 
 
-# =========================
-# BOXPLOTS + BRECHAS POR MATERIA
-# =========================
-def generar_boxplots_materias(df, municipio="Todos", periodo=None):
+MATERIAS = {
+    "Matemáticas": "punt_matematicas",
+    "Lectura Crítica": "punt_lectura_critica",
+    "Ciencias Naturales": "punt_c_naturales"
+}
 
+
+# =========================
+# FILTRAR DATOS
+# =========================
+def filtrar_datos(df, municipio="Todos", periodo=None):
     df = df.copy()
-
-    # FILTROS
     if municipio != "Todos":
         df = df[df["cole_mcpio_ubicacion"] == municipio]
-
     if periodo:
         df = df[df["periodo"].isin(periodo)]
+    return df
+
+
+# =========================
+# CALCULAR BRECHAS
+# =========================
+def calcular_brechas(df):
+    brechas = {}
+    for nombre, col in MATERIAS.items():
+        df_temp = df[[col, "cole_naturaleza"]].dropna()
+        public = df_temp[df_temp["cole_naturaleza"] == "Público"][col]
+        private = df_temp[df_temp["cole_naturaleza"] == "Privado"][col]
+        if len(public) > 0 and len(private) > 0:
+            brecha = private.mean() - public.mean()
+            media_pub = public.mean()
+            media_priv = private.mean()
+            brechas[nombre] = {
+                "brecha": round(brecha, 1),
+                "media_publico": round(media_pub, 1),
+                "media_privado": round(media_priv, 1)
+            }
+        else:
+            brechas[nombre] = {
+                "brecha": None,
+                "media_publico": None,
+                "media_privado": None
+            }
+    return brechas
+
+
+# =========================
+# BOXPLOTS POR MATERIA (sin anotación de brecha, ahora va aparte)
+# =========================
+def generar_boxplots_materias(df):
 
     if df.empty:
         return go.Figure().update_layout(title="No hay datos")
 
-    materias = {
-        "Matemáticas": "punt_matematicas",
-        "Lectura Crítica": "punt_lectura_critica",
-        "Ciencias Naturales": "punt_c_naturales"
-    }
+    fig = make_subplots(rows=1, cols=3, subplot_titles=list(MATERIAS.keys()))
 
-    fig = make_subplots(rows=1, cols=3, subplot_titles=list(materias.keys()))
-
-    brechas = {}
-
-    for i, (nombre, col) in enumerate(materias.items(), 1):
+    for i, (nombre, col) in enumerate(MATERIAS.items(), 1):
 
         df_temp = df[[col, "cole_naturaleza"]].dropna()
 
@@ -77,23 +106,8 @@ def generar_boxplots_materias(df, municipio="Todos", periodo=None):
             row=1, col=i
         )
 
-        # BRECHA
-        if len(public) > 0 and len(private) > 0:
-            brecha = private.mean() - public.mean()
-            brechas[nombre] = brecha
-
-            fig.add_annotation(
-                x=i - 1,
-                y=max(df_temp[col]),
-                text=f"Δ {brecha:.1f}",
-                showarrow=False,
-                font=dict(size=13),
-                xref="x domain",
-                yref="y"
-            )
-
     fig.update_layout(
-        title="Distribución y Brecha por Materia (Público vs Privado)",
+        title="Distribución por Materia (Público vs Privado)",
         height=500
     )
 
