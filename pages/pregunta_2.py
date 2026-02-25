@@ -4,73 +4,67 @@ import pandas as pd
 
 from Analysis.logica_p2 import cargar_datos, generar_boxplot_brecha
 
+# =========================
+# REGISTRO DE PÁGINA
+# =========================
 dash.register_page(__name__, path="/pregunta_2")
 
 # =========================
-# CARGAR DATA
+# CARGAR DATOS
 # =========================
 df = cargar_datos()
 
-municipios = ["Todos"] + sorted(df["cole_municipio"].dropna().unique())
+# =========================
+# OPCIONES FILTROS
+# =========================
+municipios = ["Todos"] + sorted(df["cole_mcpio_ubicacion"].dropna().unique())
 
-# Slider años (si existe)
-if "periodo" in df.columns:
-    min_year = int(df["periodo"].min())
-    max_year = int(df["periodo"].max())
-else:
-    min_year, max_year = 2010, 2020
-
+periodos = sorted(df["periodo"].dropna().unique())
 
 # =========================
 # LAYOUT
 # =========================
 layout = html.Div([
 
-    html.H2("PREGUNTA 2: PÚBLICO VS PRIVADO"),
+    html.H1("Pregunta 2: Calidad Educativa Público vs Privado"),
 
-    # FILTRO MUNICIPIO
-    html.Label("Selecciona un municipio:"),
+    html.Label("Selecciona Municipio:"),
     dcc.Dropdown(
-        id="dropdown-municipio",
+        id="filtro-municipio",
         options=[{"label": m, "value": m} for m in municipios],
         value="Todos"
     ),
 
     html.Br(),
 
-    # FILTRO AÑOS
-    html.Label("Selecciona rango de años:"),
-    dcc.RangeSlider(
-        id="slider-anios",
-        min=min_year,
-        max=max_year,
-        step=1,
-        value=[min_year, max_year],
-        marks={i: str(i) for i in range(min_year, max_year + 1)}
+    html.Label("Selecciona Periodo(s):"),
+    dcc.Dropdown(
+        id="filtro-periodo",
+        options=[{"label": str(p), "value": p} for p in periodos],
+        value=periodos,
+        multi=True
     ),
 
     html.Br(),
 
-    # GRAFICA
     dcc.Graph(id="grafica-boxplot-brecha")
 
 ])
-
 
 # =========================
 # CALLBACK
 # =========================
 @dash.callback(
     Output("grafica-boxplot-brecha", "figure"),
-    Input("dropdown-municipio", "value"),
-    Input("slider-anios", "value")
+    Input("filtro-municipio", "value"),
+    Input("filtro-periodo", "value")
 )
-def actualizar_grafica(municipio, rango_anios):
+def actualizar_grafica(municipio, periodo):
 
     fig = generar_boxplot_brecha(
         df,
         municipio=municipio,
-        rango_anios=rango_anios
+        periodo=periodo
     )
 
     return fig

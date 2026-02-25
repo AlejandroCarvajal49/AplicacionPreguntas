@@ -1,106 +1,100 @@
 import pandas as pd
-import plotly.express as px
 import plotly.graph_objects as go
-
-
-# =========================
-# CARGAR DATOS
-# =========================
-def cargar_datos(path="data/icfes_antioquia.csv"):
-    df = pd.read_csv(path)
-    return df
-
+from plotly.subplots import make_subplots
+import os
 
 # =========================
-# LIMPIAR VARIABLES CLAVE
+# CARGA DE DATOS
 # =========================
-def preparar_datos(df):
-    df = df.copy()
+def cargar_datos(path="data/saber11_Antioquia_clean.csv"):
+    base_path = os.path.dirname(__file__)
+    full_path = os.path.join(base_path, "..", path)
+    full_path = os.path.abspath(full_path)
 
-    # Normalizar nombres de colegio
-    df["tipo_colegio"] = df["cole_naturaleza"].replace({
+    df = pd.read_csv(full_path)
+
+    df["cole_naturaleza"] = df["cole_naturaleza"].replace({
         "OFICIAL": "Público",
-        "Oficial": "Público",
-        "oficial": "Público",
-        "PRIVADO": "Privado",
-        "Privado": "Privado",
-        "privado": "Privado"
+        "NO OFICIAL": "Privado"
     })
 
     return df
 
 
 # =========================
-# GRAFICA PRINCIPAL (BOXPLOT + BRECHA)
+# BOXPLOTS + BRECHAS POR MATERIA
 # =========================
-def generar_boxplot_brecha(df, municipio=None, rango_anios=None):
-    
-    df = preparar_datos(df)
+def generar_boxplots_materias(df, municipio="Todos", periodo=None):
 
-    # FILTRO MUNICIPIO
-    if municipio and municipio != "Todos":
-        df = df[df["cole_municipio"] == municipio]
+    df = df.copy()
 
-    # FILTRO AÑOS (si existe columna)
-    if rango_anios and "periodo" in df.columns:
-        df = df[df["periodo"].between(rango_anios[0], rango_anios[1])]
+    # FILTROS
+    if municipio != "Todos":
+        df = df[df["cole_mcpio_ubicacion"] == municipio]
+
+    if periodo:
+        df = df[df["periodo"].isin(periodo)]
+
+    if df.empty:
+        return go.Figure().update_layout(title="No hay datos")
 
     materias = {
-        "punt_matematicas": "Matemáticas",
-        "punt_lectura_critica": "Lectura Crítica",
-        "punt_c_naturales": "Ciencias Naturales"
+        "Matemáticas": "punt_matematicas",
+        "Lectura Crítica": "punt_lectura_critica",
+        "Ciencias Naturales": "punt_c_naturales"
     }
 
-    df_long = df.melt(
-        id_vars=["tipo_colegio"],
-        value_vars=list(materias.keys()),
-        var_name="materia",
-        value_name="puntaje"
-    )
+    fig = make_subplots(rows=1, cols=3, subplot_titles=list(materias.keys()))
 
-    df_long["materia"] = df_long["materia"].map(materias)
+    brechas = {}
 
-    # =========================
-    # BOXPLOT
-    # =========================
-    fig = px.box(
-        df_long,
-        x="materia",
-        y="puntaje",
-        color="tipo_colegio",
-        color_discrete_map={
-            "Público": "blue",
-            "Privado": "red"
-        },
-        points="outliers",
-        title="Distribución + Brecha (Privado vs Público)"
-    )
+    for i, (nombre, col) in enumerate(materias.items(), 1):
 
-    # =========================
-    # CALCULO DE BRECHA
-    # =========================
-    pivot = df_long.groupby(["materia", "tipo_colegio"])["puntaje"].mean().unstack()
+        df_temp = df[[col, "cole_naturaleza"]].dropna()
 
-    # 👉 MANEJO SEGURO (CLAVE DEL ERROR)
-    pivot["Público"] = pivot.get("Público", 0)
-    pivot["Privado"] = pivot.get("Privado", 0)
+        public = df_temp[df_temp["cole_naturaleza"] == "Público"][col]
+        private = df_temp[df_temp["cole_naturaleza"] == "Privado"][col]
 
-    pivot["brecha"] = pivot["Privado"] - pivot["Público"]
-
-    # Si no hay datos suficientes
-    if pivot["brecha"].isna().all():
-        return px.box(title="No hay datos suficientes para comparar")
-
-    # =========================
-    # ANOTAR BRECHA EN GRAFICA
-    # =========================
-    for i, materia in enumerate(pivot.index):
-        fig.add_annotation(
-            x=materia,
-            y=max(df_long["puntaje"]),
-            text=f"Brecha: {pivot.loc[materia, 'brecha']:.2f}",
-            showarrow=False,
-            font=dict(size=12, color="black")
+        # BOX PUBLICO
+        fig.add_trace(
+            go.Box(
+                y=public,
+                name="Público",
+                marker_color="#1f77b4",
+                showlegend=(i == 1)
+            ),
+            row=1, col=i
         )
+
+        # BOX PRIVADO
+        fig.add_trace(
+            go.Box(
+                y=private,
+                name="Privado",
+                marker_color="#d62728",
+                showlegend=(i == 1)
+            ),
+            row=1, col=i
+        )
+
+        # BRECHA
+        if len(public) > 0 and len(private) > 0:
+            brecha = private.mean() - public.mean()
+            brechas[nombre] = brecha
+
+            fig.add_annotation(
+                x=i - 1,
+                y=max(df_temp[col]),
+                text=f"Δ {brecha:.1f}",
+                showarrow=False,
+                font=dict(size=13),
+                xref="x domain",
+                yref="y"
+            )
+
+    fig.update_layout(
+        title="Distribución y Brecha por Materia (Público vs Privado)",
+        height=500
+    )
 
     return fig
