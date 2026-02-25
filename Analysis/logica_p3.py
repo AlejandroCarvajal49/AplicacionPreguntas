@@ -159,3 +159,52 @@ def calcular_probabilidad_b1(df, municipio):
     # Diferencial de probabilidad (Z%)
     diferencia_z = prob_con - prob_sin
     return round(diferencia_z, 2)
+
+
+def generar_serie_tic_ingles_por_periodo(df, municipio='TODOS'):
+    """Genera una serie temporal del promedio de `punt_ingles` por año,
+    separada por categorías de `Acceso_TIC`.
+
+    Se asume que `df` tiene la columna `periodo` y se usan los primeros 4
+    caracteres como año (ej: '2019-1' -> 2019).
+    """
+    dff = df.copy()
+    # Asegurar que exista la columna Acceso_TIC (si no, derivarla)
+    if 'Acceso_TIC' not in dff.columns:
+        dff['Acceso_TIC'] = dff.apply(
+            lambda x: 'Internet y Computador' if x.get('fami_tieneinternet') == 'Si' and x.get('fami_tienecomputador') == 'Si'
+            else ('Solo Internet' if x.get('fami_tieneinternet') == 'Si'
+                  else ('Solo Computador' if x.get('fami_tienecomputador') == 'Si' else 'Sin Acceso TIC')),
+            axis=1
+        )
+
+    # Extraer año de la columna periodo (primeros 4 dígitos)
+    if 'periodo' in dff.columns:
+        dff['year'] = dff['periodo'].astype(str).str[:4]
+        # filtrar años válidos numéricos
+        dff = dff[dff['year'].str.isnumeric()]
+        dff['year'] = dff['year'].astype(int)
+    else:
+        dff['year'] = None
+
+    if municipio != 'TODOS':
+        dff = dff[dff['cole_mcpio_ubicacion'] == municipio]
+
+    # Agrupar por año y acceso TIC
+    if dff['year'].notna().any():
+        df_g = dff.groupby(['year', 'Acceso_TIC'], as_index=False)['punt_ingles'].mean()
+        df_g = df_g.sort_values('year')
+        fig = px.line(
+            df_g,
+            x='year',
+            y='punt_ingles',
+            color='Acceso_TIC',
+            markers=True,
+            title=f'Promedio Puntaje Inglés por Año y Acceso TIC ({municipio})',
+            labels={'punt_ingles': 'Promedio Puntaje Inglés', 'year': 'Año'}
+        )
+        fig.update_layout(margin={"r":0,"t":40,"l":0,"b":0})
+    else:
+        fig = px.line(title='No hay datos de periodo para construir la serie temporal')
+
+    return fig
