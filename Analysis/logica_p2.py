@@ -4,9 +4,8 @@ import plotly.express as px
 from plotly.subplots import make_subplots
 import os
 
-# =========================
+
 # CARGA DE DATOS
-# =========================
 def cargar_datos(path="data/saber11_Antioquia_clean.csv"):
     base_path = os.path.dirname(__file__)
     full_path = os.path.join(base_path, "..", path)
@@ -14,11 +13,13 @@ def cargar_datos(path="data/saber11_Antioquia_clean.csv"):
 
     df = pd.read_csv(full_path)
 
+    # Renombrar naturaleza del colegio para claridad
     df["cole_naturaleza"] = df["cole_naturaleza"].replace({
         "OFICIAL": "Público",
         "NO OFICIAL": "Privado"
     })
 
+    # Merge con coordenadas geograficas para el mapa
     coord_path = os.path.join(base_path, "..", "data", "municipios_unicos.csv")
     coord_path = os.path.abspath(coord_path)
     df_coord = pd.read_csv(coord_path)
@@ -27,6 +28,7 @@ def cargar_datos(path="data/saber11_Antioquia_clean.csv"):
     return df
 
 
+# MATERIAS DISPONIBLES
 MATERIAS = {
     "Inglés": "punt_ingles",
     "Matemáticas": "punt_matematicas",
@@ -36,18 +38,19 @@ MATERIAS = {
     "Puntaje Global": "punt_global"
 }
 
-# =========================
-# FORMATO GLOBAL
-# =========================
+
+# CONSTANTES DE FORMATO
 FONT_FAMILY = "Segoe UI, Arial, sans-serif"
 COLOR_PUBLICO = "#1f77b4"
 COLOR_PRIVADO = "#c0392b"
 COLOR_GRID = "rgba(200,200,200,0.3)"
 PLOT_BG = "white"
 
+
+# LAYOUT BASE
+# Aplica formato consistente a cualquier figura de plotly
 def _layout_base(fig, title, subtitle=None, height=500,
                  xaxis_title=None, yaxis_title=None, showlegend=True):
-    """Aplica formato consistente a cualquier figura."""
 
     title_text = f"<b>{title}</b>"
     if subtitle:
@@ -81,6 +84,7 @@ def _layout_base(fig, title, subtitle=None, height=500,
             tickfont=dict(size=11)
         )
 
+    # Leyenda horizontal debajo de la grafica
     if showlegend:
         fig.update_layout(
             legend=dict(
@@ -97,9 +101,8 @@ def _layout_base(fig, title, subtitle=None, height=500,
     return fig
 
 
-# =========================
 # FILTRAR DATOS
-# =========================
+# Filtra por municipio y lista de periodos
 def filtrar_datos(df, municipio="Todos", periodo=None):
     df = df.copy()
     if municipio != "Todos":
@@ -109,9 +112,8 @@ def filtrar_datos(df, municipio="Todos", periodo=None):
     return df
 
 
-# =========================
 # CALCULAR BRECHAS
-# =========================
+# Calcula la diferencia de medias entre privado y publico para cada materia
 def calcular_brechas(df):
     brechas = {}
     for nombre, col in MATERIAS.items():
@@ -136,9 +138,8 @@ def calcular_brechas(df):
     return brechas
 
 
-# =========================
 # BOXPLOTS POR MATERIA
-# =========================
+# Grid de 2x3 boxplots comparando publico vs privado en cada materia
 def generar_boxplots_materias(df):
 
     if df.empty:
@@ -160,6 +161,7 @@ def generar_boxplots_materias(df):
         public = df_temp[df_temp["cole_naturaleza"] == "Público"][col]
         private = df_temp[df_temp["cole_naturaleza"] == "Privado"][col]
 
+        # Solo mostrar leyenda en el primer subplot para no repetir
         fig.add_trace(
             go.Box(
                 y=public,
@@ -193,16 +195,15 @@ def generar_boxplots_materias(df):
         showlegend=True
     )
 
-    # Ajustar subtítulos de subplots
+    # Formato de los subtitulos de cada subplot
     for annotation in fig['layout']['annotations']:
         annotation['font'] = dict(size=13, family=FONT_FAMILY, color="#444")
 
     return fig
 
 
-# =========================
-# Helper para formatear periodo
-# =========================
+# FORMATO DE PERIODO
+# Convierte 20151 a "2015-1" para mostrar en ejes y sliders
 def formato_periodo(p):
     s = str(p)
     if len(s) >= 5:
@@ -210,9 +211,8 @@ def formato_periodo(p):
     return s
 
 
-# =========================
-# MAPA GEOGRÁFICO: Brecha por Municipio
-# =========================
+# MAPA DE BRECHA POR MUNICIPIO
+# Scatter map donde cada punto es un municipio coloreado segun la brecha
 def generar_mapa_brecha(df, columna_materia, municipio_seleccionado="Todos"):
 
     if df.empty or columna_materia not in df.columns:
@@ -223,10 +223,12 @@ def generar_mapa_brecha(df, columna_materia, municipio_seleccionado="Todos"):
     if df_temp.empty:
         return go.Figure().update_layout(title="No hay datos disponibles")
 
+    # Promedios por municipio y tipo de colegio
     medias = df_temp.groupby(
         ["cole_mcpio_ubicacion", "lat", "lon", "cole_naturaleza"]
     )[columna_materia].mean().reset_index()
 
+    # Pivotar para tener publico y privado en columnas separadas
     pivot = medias.pivot_table(
         index=["cole_mcpio_ubicacion", "lat", "lon"],
         columns="cole_naturaleza",
@@ -241,6 +243,7 @@ def generar_mapa_brecha(df, columna_materia, municipio_seleccionado="Todos"):
         color_col = "brecha"
         color_label = "Brecha (Priv - Púb)"
     else:
+        # Si solo hay un tipo de colegio, mostrar promedio general
         agg = df_temp.groupby(
             ["cole_mcpio_ubicacion", "lat", "lon"]
         )[columna_materia].mean().reset_index()
@@ -252,6 +255,7 @@ def generar_mapa_brecha(df, columna_materia, municipio_seleccionado="Todos"):
     if pivot.empty:
         return go.Figure().update_layout(title="No hay datos suficientes")
 
+    # Resaltar municipio seleccionado, atenuar el resto
     if municipio_seleccionado != "Todos":
         pivot["tamano"] = pivot["cole_mcpio_ubicacion"].apply(
             lambda x: 18 if x == municipio_seleccionado else 6
@@ -266,10 +270,12 @@ def generar_mapa_brecha(df, columna_materia, municipio_seleccionado="Todos"):
     nombre_materia = [k for k, v in MATERIAS.items() if v == columna_materia]
     nombre_materia = nombre_materia[0] if nombre_materia else columna_materia
 
+    # Escala simetrica centrada en 0
     max_abs = max(abs(pivot[color_col].min()), abs(pivot[color_col].max()))
     if max_abs == 0:
         max_abs = 1
 
+    # Configurar datos del hover
     hover_data_dict = {
         "lat": False,
         "lon": False,
@@ -329,14 +335,14 @@ def generar_mapa_brecha(df, columna_materia, municipio_seleccionado="Todos"):
     return fig
 
 
-# =========================
-# BRECHA POR ESTRATO SOCIOECONÓMICO
-# =========================
+# BRECHA POR ESTRATO SOCIOECONOMICO
+# Barras agrupadas publico vs privado por cada estrato
 def generar_brecha_por_estrato(df, columna_materia):
 
     if df.empty or columna_materia not in df.columns:
         return go.Figure().update_layout(title="No hay datos disponibles")
 
+    # Detectar la columna de estrato en el dataset
     col_estrato = None
     for c in ["fami_estratovivienda", "estu_estrato", "estrato"]:
         if c in df.columns:
@@ -355,6 +361,7 @@ def generar_brecha_por_estrato(df, columna_materia):
 
     df_temp[col_estrato] = df_temp[col_estrato].astype(str).str.strip()
 
+    # Filtrar solo valores de estrato validos
     valores_validos = [
         "Estrato 1", "Estrato 2", "Estrato 3",
         "Estrato 4", "Estrato 5", "Estrato 6",
@@ -365,6 +372,7 @@ def generar_brecha_por_estrato(df, columna_materia):
     if df_temp.empty:
         return go.Figure().update_layout(title="No hay datos de estrato válidos")
 
+    # Normalizar nombres para que todos digan "Estrato X"
     mapeo_estrato = {
         "1": "Estrato 1", "2": "Estrato 2", "3": "Estrato 3",
         "4": "Estrato 4", "5": "Estrato 5", "6": "Estrato 6",
@@ -381,6 +389,7 @@ def generar_brecha_por_estrato(df, columna_materia):
         "Estrato 4", "Estrato 5", "Estrato 6", "Sin Estrato"
     ]
 
+    # Promedios agrupados por estrato y tipo de colegio
     medias = df_temp.groupby(
         ["estrato_clean", "cole_naturaleza"]
     )[columna_materia].mean().reset_index()
@@ -390,6 +399,7 @@ def generar_brecha_por_estrato(df, columna_materia):
 
     fig = go.Figure()
 
+    # Barras de colegios publicos
     pub = medias[medias["cole_naturaleza"] == "Público"].copy()
     pub["estrato_clean"] = pd.Categorical(
         pub["estrato_clean"], categories=orden_estratos, ordered=True
@@ -407,6 +417,7 @@ def generar_brecha_por_estrato(df, columna_materia):
         hovertemplate="%{x} — Público<br>Puntaje: %{y:.1f}<extra></extra>"
     ))
 
+    # Barras de colegios privados
     priv = medias[medias["cole_naturaleza"] == "Privado"].copy()
     priv["estrato_clean"] = pd.Categorical(
         priv["estrato_clean"], categories=orden_estratos, ordered=True
@@ -442,7 +453,7 @@ def generar_brecha_por_estrato(df, columna_materia):
         showlegend=True
     )
 
-    # Sobreescribir posición de leyenda para esta gráfica
+    # Bajar la leyenda un poco mas para que no tape las etiquetas
     fig.update_layout(
         legend=dict(y=-0.2)
     )

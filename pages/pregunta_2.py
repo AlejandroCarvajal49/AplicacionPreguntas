@@ -9,26 +9,19 @@ from Analysis.logica_p2 import (
     formato_periodo, MATERIAS
 )
 
-# =========================
-# REGISTRO DE PÁGINA
-# =========================
+# REGISTRO DE PAGINA
 dash.register_page(__name__, path="/pregunta_2")
 
-# =========================
 # CARGAR DATOS
-# =========================
 df = cargar_datos()
 
-# =========================
-# OPCIONES FILTROS
-# =========================
+# OPCIONES DE FILTROS
 municipios = ["Todos"] + sorted(df["cole_mcpio_ubicacion"].dropna().unique())
 periodos = sorted(df["periodo"].dropna().unique())
 
 
-# =========================
-# HELPER: Tarjeta de brecha
-# =========================
+# TARJETA DE BRECHA
+# Genera una tarjeta individual para mostrar la brecha de una materia
 def crear_tarjeta_brecha(nombre_materia):
     return dbc.Col(
         dbc.Card([
@@ -45,12 +38,10 @@ def crear_tarjeta_brecha(nombre_materia):
     )
 
 
-# =========================
 # LAYOUT
-# =========================
 layout = html.Div([
 
-    # ---------- TÍTULO ----------
+    # Titulo principal y subtitulo
     html.H2("Calidad Educativa: Colegios Públicos vs Privados",
             className="text-center mt-4 mb-1",
             style={"fontWeight": "bold", "color": "#222"}),
@@ -58,7 +49,8 @@ layout = html.Div([
            className="text-center mb-4",
            style={"fontSize": "14px", "color": "#666"}),
 
-    # ---------- FILTROS ----------
+    # FILTROS GLOBALES
+    # Municipio y rango de periodos, aplican a todas las graficas
     dbc.Row([
         dbc.Col([
             html.Label("Municipio", className="fw-bold",
@@ -92,7 +84,8 @@ layout = html.Div([
 
     html.Hr(style={"borderColor": "#ddd"}),
 
-    # ---------- TARJETAS DE BRECHA ----------
+    # TARJETAS DE BRECHA
+    # Dos filas de 3 tarjetas, una por cada materia
     html.H5("Brecha por materia (Privado - Público)",
             className="text-center mt-3 mb-3",
             style={"fontWeight": "600", "color": "#333"}),
@@ -108,12 +101,14 @@ layout = html.Div([
 
     html.Hr(style={"borderColor": "#ddd"}),
 
-    # ---------- BOXPLOTS ----------
+    # BOXPLOTS
+    # Distribucion de puntajes publico vs privado por materia
     dcc.Graph(id="grafica-boxplot-brecha"),
 
     html.Hr(style={"borderColor": "#ddd"}),
 
-    # ---------- BRECHA POR ESTRATO ----------
+    # BRECHA POR ESTRATO
+    # Barras agrupadas publico vs privado por nivel socioeconomico
     dbc.Row([
         dbc.Col([
             html.Label("Materia", className="fw-bold",
@@ -132,7 +127,8 @@ layout = html.Div([
 
     html.Hr(style={"borderColor": "#ddd"}),
 
-    # ---------- MAPA ----------
+    # MAPA DE BRECHA
+    # Mapa geografico con la brecha por municipio
     dbc.Row([
         dbc.Col([
             html.Label("Materia", className="fw-bold",
@@ -154,9 +150,8 @@ layout = html.Div([
 ])
 
 
-# =========================
-# CALLBACK BOXPLOT + BRECHAS
-# =========================
+# CALLBACK BOXPLOT Y TARJETAS
+# Actualiza los boxplots y las 6 tarjetas de brecha cuando cambian los filtros globales
 @dash.callback(
     Output("grafica-boxplot-brecha", "figure"),
     *[Output(f"brecha-{nombre}", "children") for nombre in MATERIAS.keys()],
@@ -174,6 +169,7 @@ def actualizar_principales(municipio, rango_periodo):
 
     brechas = calcular_brechas(df_filtrado)
 
+    # Construir contenido de cada tarjeta segun la brecha
     tarjetas = []
     for nombre in MATERIAS.keys():
         info = brechas.get(nombre, {})
@@ -182,6 +178,7 @@ def actualizar_principales(municipio, rango_periodo):
         media_priv = info.get("media_privado")
 
         if brecha_val is not None:
+            # Color rojo si privado supera, azul si publico supera
             if brecha_val > 0:
                 color_brecha = "#c0392b"
                 signo = "+"
@@ -218,9 +215,8 @@ def actualizar_principales(municipio, rango_periodo):
     return fig_boxplot, *tarjetas
 
 
-# =========================
 # CALLBACK BRECHA POR ESTRATO
-# =========================
+# Responde a filtros globales mas el dropdown de materia
 @dash.callback(
     Output("grafica-brecha-estrato", "figure"),
     Input("filtro-municipio", "value"),
@@ -237,9 +233,8 @@ def actualizar_estrato(municipio, rango_periodo, columna_materia):
     return generar_brecha_por_estrato(df_filtrado, columna_materia)
 
 
-# =========================
 # CALLBACK MAPA
-# =========================
+# Siempre usa todos los municipios para el mapa, resalta el seleccionado
 @dash.callback(
     Output("grafica-mapa-brecha", "figure"),
     Input("filtro-municipio", "value"),
@@ -251,6 +246,7 @@ def actualizar_mapa(municipio, rango_periodo, columna_materia):
     idx_min, idx_max = rango_periodo
     periodos_seleccionados = periodos[idx_min:idx_max + 1]
 
+    # Filtra todos los municipios para mostrar el mapa completo
     df_filtrado = filtrar_datos(df, municipio="Todos", periodo=periodos_seleccionados)
 
     fig_mapa = generar_mapa_brecha(df_filtrado, columna_materia, municipio_seleccionado=municipio)
