@@ -19,7 +19,6 @@ def cargar_datos(path="data/saber11_Antioquia_clean.csv"):
         "NO OFICIAL": "Privado"
     })
 
-    # Cargar coordenadas
     coord_path = os.path.join(base_path, "..", "data", "municipios_unicos.csv")
     coord_path = os.path.abspath(coord_path)
     df_coord = pd.read_csv(coord_path)
@@ -29,10 +28,73 @@ def cargar_datos(path="data/saber11_Antioquia_clean.csv"):
 
 
 MATERIAS = {
+    "Inglés": "punt_ingles",
     "Matemáticas": "punt_matematicas",
+    "Sociales y Ciudadanas": "punt_sociales_ciudadanas",
+    "Ciencias Naturales": "punt_c_naturales",
     "Lectura Crítica": "punt_lectura_critica",
-    "Ciencias Naturales": "punt_c_naturales"
+    "Puntaje Global": "punt_global"
 }
+
+# =========================
+# FORMATO GLOBAL
+# =========================
+FONT_FAMILY = "Segoe UI, Arial, sans-serif"
+COLOR_PUBLICO = "#1f77b4"
+COLOR_PRIVADO = "#c0392b"
+COLOR_GRID = "rgba(200,200,200,0.3)"
+PLOT_BG = "white"
+
+def _layout_base(fig, title, subtitle=None, height=500,
+                 xaxis_title=None, yaxis_title=None, showlegend=True):
+    """Aplica formato consistente a cualquier figura."""
+
+    title_text = f"<b>{title}</b>"
+    if subtitle:
+        title_text += f"<br><span style='font-size:12px;color:#666'>{subtitle}</span>"
+
+    fig.update_layout(
+        title=dict(
+            text=title_text,
+            x=0.5,
+            xanchor="center",
+            font=dict(size=16, family=FONT_FAMILY, color="#222")
+        ),
+        height=height,
+        plot_bgcolor=PLOT_BG,
+        paper_bgcolor="white",
+        font=dict(family=FONT_FAMILY, size=12, color="#333"),
+        showlegend=showlegend,
+        margin=dict(l=60, r=40, t=80, b=80),
+    )
+
+    if xaxis_title:
+        fig.update_xaxes(
+            title=dict(text=xaxis_title, font=dict(size=13)),
+            showgrid=True, gridcolor=COLOR_GRID,
+            tickfont=dict(size=11)
+        )
+    if yaxis_title:
+        fig.update_yaxes(
+            title=dict(text=yaxis_title, font=dict(size=13)),
+            showgrid=True, gridcolor=COLOR_GRID,
+            tickfont=dict(size=11)
+        )
+
+    if showlegend:
+        fig.update_layout(
+            legend=dict(
+                orientation="h",
+                yanchor="top", y=-0.12,
+                xanchor="center", x=0.5,
+                font=dict(size=12),
+                bgcolor="rgba(255,255,255,0.8)",
+                bordercolor="rgba(200,200,200,0.5)",
+                borderwidth=1
+            )
+        )
+
+    return fig
 
 
 # =========================
@@ -80,14 +142,21 @@ def calcular_brechas(df):
 def generar_boxplots_materias(df):
 
     if df.empty:
-        return go.Figure().update_layout(title="No hay datos")
+        return go.Figure().update_layout(title="No hay datos disponibles")
 
-    fig = make_subplots(rows=1, cols=3, subplot_titles=list(MATERIAS.keys()))
+    nombres = list(MATERIAS.keys())
+    fig = make_subplots(
+        rows=2, cols=3,
+        subplot_titles=nombres,
+        vertical_spacing=0.14,
+        horizontal_spacing=0.06
+    )
 
     for i, (nombre, col) in enumerate(MATERIAS.items(), 1):
+        row = 1 if i <= 3 else 2
+        col_idx = i if i <= 3 else i - 3
 
         df_temp = df[[col, "cole_naturaleza"]].dropna()
-
         public = df_temp[df_temp["cole_naturaleza"] == "Público"][col]
         private = df_temp[df_temp["cole_naturaleza"] == "Privado"][col]
 
@@ -95,33 +164,46 @@ def generar_boxplots_materias(df):
             go.Box(
                 y=public,
                 name="Público",
-                marker_color="#1f77b4",
-                showlegend=(i == 1)
+                marker_color=COLOR_PUBLICO,
+                showlegend=(i == 1),
+                legendgroup="Público"
             ),
-            row=1, col=i
+            row=row, col=col_idx
         )
 
         fig.add_trace(
             go.Box(
                 y=private,
                 name="Privado",
-                marker_color="#d62728",
-                showlegend=(i == 1)
+                marker_color=COLOR_PRIVADO,
+                showlegend=(i == 1),
+                legendgroup="Privado"
             ),
-            row=1, col=i
+            row=row, col=col_idx
         )
 
-    fig.update_layout(
-        title="Distribución por Materia (Público vs Privado)",
-        height=500
+        fig.update_yaxes(title_text="Puntaje", row=row, col=col_idx,
+                         showgrid=True, gridcolor=COLOR_GRID)
+
+    _layout_base(
+        fig,
+        title="Distribución de puntajes por materia",
+        subtitle="Comparación entre colegios públicos y privados",
+        height=700,
+        showlegend=True
     )
+
+    # Ajustar subtítulos de subplots
+    for annotation in fig['layout']['annotations']:
+        annotation['font'] = dict(size=13, family=FONT_FAMILY, color="#444")
 
     return fig
 
 
+# =========================
 # Helper para formatear periodo
+# =========================
 def formato_periodo(p):
-    """Convierte 20151 -> '2015-1', 20202 -> '2020-2', etc."""
     s = str(p)
     if len(s) >= 5:
         return f"{s[:4]}-{s[4:]}"
@@ -129,25 +211,18 @@ def formato_periodo(p):
 
 
 # =========================
-# MAPA DE CALOR GEOGRÁFICO: Brecha por Municipio
+# MAPA GEOGRÁFICO: Brecha por Municipio
 # =========================
 def generar_mapa_brecha(df, columna_materia, municipio_seleccionado="Todos"):
-    """
-    Mapa de Antioquia con puntos por municipio.
-    Color = brecha (Privado - Público) en la materia seleccionada.
-    Azul = público mejor, Rojo = privado mejor.
-    Si no hay datos de ambos tipos, muestra el puntaje promedio general.
-    """
 
     if df.empty or columna_materia not in df.columns:
-        return go.Figure().update_layout(title="No hay datos")
+        return go.Figure().update_layout(title="No hay datos disponibles")
 
     df_temp = df[["cole_mcpio_ubicacion", "lat", "lon", columna_materia, "cole_naturaleza"]].dropna()
 
     if df_temp.empty:
-        return go.Figure().update_layout(title="No hay datos")
+        return go.Figure().update_layout(title="No hay datos disponibles")
 
-    # Calcular brecha por municipio
     medias = df_temp.groupby(
         ["cole_mcpio_ubicacion", "lat", "lon", "cole_naturaleza"]
     )[columna_materia].mean().reset_index()
@@ -159,26 +234,24 @@ def generar_mapa_brecha(df, columna_materia, municipio_seleccionado="Todos"):
     ).reset_index()
 
     if "Privado" in pivot.columns and "Público" in pivot.columns:
-        pivot["brecha"] = pivot["Privado"] - pivot["Público"]
-        pivot["brecha"] = pivot["brecha"].round(1)
+        pivot["brecha"] = (pivot["Privado"] - pivot["Público"]).round(1)
         pivot["media_pub"] = pivot["Público"].round(1)
         pivot["media_priv"] = pivot["Privado"].round(1)
-        # Solo municipios con ambos tipos
         pivot = pivot.dropna(subset=["brecha"])
         color_col = "brecha"
-        color_label = "Brecha (Priv−Púb)"
+        color_label = "Brecha (Priv - Púb)"
     else:
-        # Si no hay ambos tipos, mostrar promedio general
-        pivot["promedio"] = df_temp.groupby(
+        agg = df_temp.groupby(
             ["cole_mcpio_ubicacion", "lat", "lon"]
-        )[columna_materia].mean().values
+        )[columna_materia].mean().reset_index()
+        pivot = pivot.merge(agg, on=["cole_mcpio_ubicacion", "lat", "lon"], how="left")
+        pivot.rename(columns={columna_materia: "promedio"}, inplace=True)
         color_col = "promedio"
-        color_label = "Puntaje Promedio"
+        color_label = "Puntaje promedio"
 
     if pivot.empty:
         return go.Figure().update_layout(title="No hay datos suficientes")
 
-    # Tamaño y opacidad según filtro de municipio
     if municipio_seleccionado != "Todos":
         pivot["tamano"] = pivot["cole_mcpio_ubicacion"].apply(
             lambda x: 18 if x == municipio_seleccionado else 6
@@ -190,14 +263,24 @@ def generar_mapa_brecha(df, columna_materia, municipio_seleccionado="Todos"):
         pivot["tamano"] = 10
         pivot["opacidad"] = 0.85
 
-    # Nombre de materia para el título
     nombre_materia = [k for k, v in MATERIAS.items() if v == columna_materia]
     nombre_materia = nombre_materia[0] if nombre_materia else columna_materia
 
-    # Determinar rango simétrico para la escala de colores
     max_abs = max(abs(pivot[color_col].min()), abs(pivot[color_col].max()))
     if max_abs == 0:
         max_abs = 1
+
+    hover_data_dict = {
+        "lat": False,
+        "lon": False,
+        "tamano": False,
+        "opacidad": False,
+        color_col: ":.1f",
+    }
+    if "media_pub" in pivot.columns:
+        hover_data_dict["media_pub"] = ":.1f"
+    if "media_priv" in pivot.columns:
+        hover_data_dict["media_priv"] = ":.1f"
 
     fig = px.scatter_mapbox(
         pivot,
@@ -205,19 +288,11 @@ def generar_mapa_brecha(df, columna_materia, municipio_seleccionado="Todos"):
         lon="lon",
         color=color_col,
         hover_name="cole_mcpio_ubicacion",
-        hover_data={
-            "lat": False,
-            "lon": False,
-            "tamano": False,
-            "opacidad": False,
-            color_col: ":.1f",
-            "media_pub": ":.1f" if "media_pub" in pivot.columns else False,
-            "media_priv": ":.1f" if "media_priv" in pivot.columns else False,
-        },
+        hover_data=hover_data_dict,
         color_continuous_scale=[
-            [0, "#2166ac"],       # Azul fuerte (público mejor)
-            [0.5, "#f7f7f7"],     # Blanco (sin brecha)
-            [1, "#b2182b"]        # Rojo fuerte (privado mejor)
+            [0, "#2166ac"],
+            [0.5, "#f7f7f7"],
+            [1, "#b2182b"]
         ],
         range_color=[-max_abs, max_abs],
         size="tamano",
@@ -225,17 +300,151 @@ def generar_mapa_brecha(df, columna_materia, municipio_seleccionado="Todos"):
         mapbox_style="carto-positron",
         zoom=6.0,
         center={"lat": 6.85, "lon": -75.56},
-        title=f"Brecha Público vs Privado — {nombre_materia} ({municipio_seleccionado})"
     )
 
     fig.update_traces(marker=dict(opacity=pivot["opacidad"].tolist()))
 
+    filtro_label = municipio_seleccionado if municipio_seleccionado != "Todos" else "Todos los municipios"
+
     fig.update_layout(
-        margin={"r": 0, "t": 40, "l": 0, "b": 0},
+        title=dict(
+            text=(
+                f"<b>Brecha educativa por municipio — {nombre_materia}</b>"
+                f"<br><span style='font-size:12px;color:#666'>"
+                f"Filtro: {filtro_label} | Azul: público supera | Rojo: privado supera</span>"
+            ),
+            x=0.5,
+            xanchor="center",
+            font=dict(size=16, family=FONT_FAMILY, color="#222")
+        ),
+        margin={"r": 0, "t": 80, "l": 0, "b": 0},
         height=600,
+        font=dict(family=FONT_FAMILY, size=12, color="#333"),
         coloraxis_colorbar=dict(
-            title=dict(text=color_label)
+            title=dict(text=color_label, font=dict(size=12)),
+            tickfont=dict(size=11)
         )
+    )
+
+    return fig
+
+
+# =========================
+# BRECHA POR ESTRATO SOCIOECONÓMICO
+# =========================
+def generar_brecha_por_estrato(df, columna_materia):
+
+    if df.empty or columna_materia not in df.columns:
+        return go.Figure().update_layout(title="No hay datos disponibles")
+
+    col_estrato = None
+    for c in ["fami_estratovivienda", "estu_estrato", "estrato"]:
+        if c in df.columns:
+            col_estrato = c
+            break
+
+    if col_estrato is None:
+        return go.Figure().update_layout(
+            title="No se encontró variable de estrato en los datos"
+        )
+
+    df_temp = df[[col_estrato, columna_materia, "cole_naturaleza"]].dropna()
+
+    if df_temp.empty:
+        return go.Figure().update_layout(title="No hay datos disponibles")
+
+    df_temp[col_estrato] = df_temp[col_estrato].astype(str).str.strip()
+
+    valores_validos = [
+        "Estrato 1", "Estrato 2", "Estrato 3",
+        "Estrato 4", "Estrato 5", "Estrato 6",
+        "1", "2", "3", "4", "5", "6", "Sin Estrato"
+    ]
+    df_temp = df_temp[df_temp[col_estrato].isin(valores_validos)]
+
+    if df_temp.empty:
+        return go.Figure().update_layout(title="No hay datos de estrato válidos")
+
+    mapeo_estrato = {
+        "1": "Estrato 1", "2": "Estrato 2", "3": "Estrato 3",
+        "4": "Estrato 4", "5": "Estrato 5", "6": "Estrato 6",
+        "Estrato 1": "Estrato 1", "Estrato 2": "Estrato 2",
+        "Estrato 3": "Estrato 3", "Estrato 4": "Estrato 4",
+        "Estrato 5": "Estrato 5", "Estrato 6": "Estrato 6",
+        "Sin Estrato": "Sin Estrato"
+    }
+    df_temp["estrato_clean"] = df_temp[col_estrato].map(mapeo_estrato)
+    df_temp = df_temp.dropna(subset=["estrato_clean"])
+
+    orden_estratos = [
+        "Estrato 1", "Estrato 2", "Estrato 3",
+        "Estrato 4", "Estrato 5", "Estrato 6", "Sin Estrato"
+    ]
+
+    medias = df_temp.groupby(
+        ["estrato_clean", "cole_naturaleza"]
+    )[columna_materia].mean().reset_index()
+
+    nombre_materia = [k for k, v in MATERIAS.items() if v == columna_materia]
+    nombre_materia = nombre_materia[0] if nombre_materia else columna_materia
+
+    fig = go.Figure()
+
+    pub = medias[medias["cole_naturaleza"] == "Público"].copy()
+    pub["estrato_clean"] = pd.Categorical(
+        pub["estrato_clean"], categories=orden_estratos, ordered=True
+    )
+    pub = pub.sort_values("estrato_clean")
+
+    fig.add_trace(go.Bar(
+        x=pub["estrato_clean"],
+        y=pub[columna_materia],
+        name="Público",
+        marker_color=COLOR_PUBLICO,
+        text=[f"{v:.1f}" for v in pub[columna_materia]],
+        textposition="outside",
+        textfont=dict(size=10),
+        hovertemplate="%{x} — Público<br>Puntaje: %{y:.1f}<extra></extra>"
+    ))
+
+    priv = medias[medias["cole_naturaleza"] == "Privado"].copy()
+    priv["estrato_clean"] = pd.Categorical(
+        priv["estrato_clean"], categories=orden_estratos, ordered=True
+    )
+    priv = priv.sort_values("estrato_clean")
+
+    fig.add_trace(go.Bar(
+        x=priv["estrato_clean"],
+        y=priv[columna_materia],
+        name="Privado",
+        marker_color=COLOR_PRIVADO,
+        text=[f"{v:.1f}" for v in priv[columna_materia]],
+        textposition="outside",
+        textfont=dict(size=10),
+        hovertemplate="%{x} — Privado<br>Puntaje: %{y:.1f}<extra></extra>"
+    ))
+
+    fig.update_layout(
+        barmode="group",
+        xaxis=dict(
+            categoryorder="array",
+            categoryarray=orden_estratos,
+        ),
+    )
+
+    _layout_base(
+        fig,
+        title=f"Puntaje promedio por estrato — {nombre_materia}",
+        subtitle="Comparación entre colegios públicos y privados por nivel socioeconómico",
+        height=450,
+        xaxis_title="Estrato socioeconómico",
+        yaxis_title="Puntaje promedio",
+        showlegend=True
+    )
+
+    # Sobreescribir posición de leyenda para esta gráfica
+    fig.update_layout(
+        legend=dict(y=-0.2)
     )
 
     return fig

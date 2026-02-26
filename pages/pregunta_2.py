@@ -5,6 +5,7 @@ import dash_bootstrap_components as dbc
 from Analysis.logica_p2 import (
     cargar_datos, filtrar_datos, calcular_brechas,
     generar_boxplots_materias, generar_mapa_brecha,
+    generar_brecha_por_estrato,
     formato_periodo, MATERIAS
 )
 
@@ -22,8 +23,8 @@ df = cargar_datos()
 # OPCIONES FILTROS
 # =========================
 municipios = ["Todos"] + sorted(df["cole_mcpio_ubicacion"].dropna().unique())
-
 periodos = sorted(df["periodo"].dropna().unique())
+
 
 # =========================
 # HELPER: Tarjeta de brecha
@@ -32,14 +33,15 @@ def crear_tarjeta_brecha(nombre_materia):
     return dbc.Col(
         dbc.Card([
             dbc.CardBody([
-                html.H5(nombre_materia, className="text-center mb-2",
-                         style={"fontWeight": "bold"}),
+                html.H6(nombre_materia, className="text-center mb-2",
+                         style={"fontWeight": "600", "fontSize": "13px", "color": "#444"}),
                 html.Div(id=f"brecha-{nombre_materia}", children=[
-                    html.P("Cargando...", className="text-center text-muted")
+                    html.P("Cargando...", className="text-center text-muted",
+                           style={"fontSize": "12px"})
                 ])
-            ])
-        ], className="shadow-sm", style={"borderRadius": "12px"}),
-        width=4
+            ], style={"padding": "12px 8px"})
+        ], className="shadow-sm", style={"borderRadius": "8px", "border": "1px solid #e0e0e0"}),
+        width=4, className="mb-3"
     )
 
 
@@ -48,26 +50,29 @@ def crear_tarjeta_brecha(nombre_materia):
 # =========================
 layout = html.Div([
 
-    html.H1("Pregunta 2: Calidad Educativa Público vs Privado",
-            className="text-center my-4"),
+    # ---------- TÍTULO ----------
+    html.H2("Calidad Educativa: Colegios Públicos vs Privados",
+            className="text-center mt-4 mb-1",
+            style={"fontWeight": "bold", "color": "#222"}),
+    html.P("Análisis de brechas en puntajes Saber 11 en Antioquia",
+           className="text-center mb-4",
+           style={"fontSize": "14px", "color": "#666"}),
 
-    # ---------- FILTRO MUNICIPIO ----------
+    # ---------- FILTROS ----------
     dbc.Row([
         dbc.Col([
-            html.Label("Selecciona Municipio:", className="fw-bold"),
+            html.Label("Municipio", className="fw-bold",
+                       style={"fontSize": "13px"}),
             dcc.Dropdown(
                 id="filtro-municipio",
                 options=[{"label": m, "value": m} for m in municipios],
                 value="Todos",
                 clearable=False
             ),
-        ], width=6)
-    ], justify="center", className="mb-4"),
-
-    # ---------- FILTRO PERIODO COMO TIMELINE ----------
-    dbc.Row([
+        ], width=4),
         dbc.Col([
-            html.Label("Línea de Tiempo - Periodos:", className="fw-bold"),
+            html.Label("Periodo", className="fw-bold",
+                       style={"fontSize": "13px"}),
             html.Div([
                 dcc.RangeSlider(
                     id="filtro-periodo-timeline",
@@ -75,48 +80,71 @@ layout = html.Div([
                     max=len(periodos) - 1,
                     step=1,
                     marks={i: {"label": formato_periodo(p),
-                               "style": {"fontSize": "12px", "transform": "rotate(-45deg)"}}
+                               "style": {"fontSize": "11px", "transform": "rotate(-45deg)"}}
                            for i, p in enumerate(periodos)},
                     value=[0, len(periodos) - 1],
                     tooltip={"placement": "top", "always_visible": False},
                     allowCross=False,
-                    className="mt-2"
                 )
-            ], style={"padding": "10px 20px 30px 20px"})
-        ], width=10)
+            ], style={"padding": "5px 10px 25px 10px"})
+        ], width=7),
     ], justify="center", className="mb-4"),
 
+    html.Hr(style={"borderColor": "#ddd"}),
+
     # ---------- TARJETAS DE BRECHA ----------
-    html.H4("Brecha Privado − Público por Materia", className="text-center mt-2 mb-3"),
+    html.H5("Brecha por materia (Privado - Público)",
+            className="text-center mt-3 mb-3",
+            style={"fontWeight": "600", "color": "#333"}),
     dbc.Row(
-        [crear_tarjeta_brecha(nombre) for nombre in MATERIAS.keys()],
+        [crear_tarjeta_brecha(nombre) for nombre in list(MATERIAS.keys())[:3]],
         justify="center",
-        className="mb-4"
+    ),
+    dbc.Row(
+        [crear_tarjeta_brecha(nombre) for nombre in list(MATERIAS.keys())[3:]],
+        justify="center",
+        className="mb-3"
     ),
 
-    # ---------- GRÁFICA BOXPLOT ----------
-    html.H4("📦 Distribución por Materia", className="text-center mt-3 mb-2"),
+    html.Hr(style={"borderColor": "#ddd"}),
+
+    # ---------- BOXPLOTS ----------
     dcc.Graph(id="grafica-boxplot-brecha"),
 
-    html.Hr(),
+    html.Hr(style={"borderColor": "#ddd"}),
 
-    # ---------- MAPA GEOGRÁFICO DE BRECHA ----------
-    html.H4("🗺️ Mapa de Brecha por Municipio",
-            className="text-center mt-3 mb-2"),
-    html.P("Azul = Público supera a Privado | Rojo = Privado supera a Público",
-           className="text-center text-muted", style={"fontSize": "13px"}),
-
+    # ---------- BRECHA POR ESTRATO ----------
     dbc.Row([
         dbc.Col([
-            html.Label("Selecciona Materia:", className="fw-bold"),
+            html.Label("Materia", className="fw-bold",
+                       style={"fontSize": "13px"}),
+            dcc.Dropdown(
+                id="filtro-materia-estrato",
+                options=[{"label": nombre, "value": col}
+                         for nombre, col in MATERIAS.items()],
+                value="punt_global",
+                clearable=False
+            ),
+        ], width=3)
+    ], justify="center", className="mb-3"),
+
+    dcc.Graph(id="grafica-brecha-estrato"),
+
+    html.Hr(style={"borderColor": "#ddd"}),
+
+    # ---------- MAPA ----------
+    dbc.Row([
+        dbc.Col([
+            html.Label("Materia", className="fw-bold",
+                       style={"fontSize": "13px"}),
             dcc.Dropdown(
                 id="filtro-materia-mapa",
                 options=[{"label": nombre, "value": col}
                          for nombre, col in MATERIAS.items()],
-                value="punt_matematicas",
+                value="punt_global",
                 clearable=False
             ),
-        ], width=4)
+        ], width=3)
     ], justify="center", className="mb-3"),
 
     dcc.Graph(id="grafica-mapa-brecha"),
@@ -124,6 +152,7 @@ layout = html.Div([
     html.Br(),
 
 ])
+
 
 # =========================
 # CALLBACK BOXPLOT + BRECHAS
@@ -134,7 +163,7 @@ layout = html.Div([
     Input("filtro-municipio", "value"),
     Input("filtro-periodo-timeline", "value")
 )
-def actualizar_boxplot(municipio, rango_periodo):
+def actualizar_principales(municipio, rango_periodo):
 
     idx_min, idx_max = rango_periodo
     periodos_seleccionados = periodos[idx_min:idx_max + 1]
@@ -154,31 +183,35 @@ def actualizar_boxplot(municipio, rango_periodo):
 
         if brecha_val is not None:
             if brecha_val > 0:
-                color_brecha = "#d62728"
-                icono = "▲"
+                color_brecha = "#c0392b"
+                signo = "+"
             elif brecha_val < 0:
-                color_brecha = "#2ca02c"
-                icono = "▼"
+                color_brecha = "#2166ac"
+                signo = ""
             else:
                 color_brecha = "#888"
-                icono = "="
+                signo = ""
 
             contenido = html.Div([
-                html.H3(f"{icono} {brecha_val:+.1f} pts",
+                html.H4(f"{signo}{brecha_val:.1f} pts",
                          className="text-center mb-1",
-                         style={"color": color_brecha, "fontWeight": "bold"}),
+                         style={"color": color_brecha, "fontWeight": "bold",
+                                "fontSize": "18px", "marginBottom": "4px"}),
                 html.P(
                     [
-                        html.Span(f"Público: {media_pub}", style={"color": "#1f77b4"}),
-                        html.Span(" | "),
-                        html.Span(f"Privado: {media_priv}", style={"color": "#d62728"}),
+                        html.Span(f"Púb: {media_pub}",
+                                  style={"color": "#1f77b4", "fontSize": "11px"}),
+                        html.Span(" | ", style={"color": "#999", "fontSize": "11px"}),
+                        html.Span(f"Priv: {media_priv}",
+                                  style={"color": "#c0392b", "fontSize": "11px"}),
                     ],
                     className="text-center",
-                    style={"fontSize": "13px", "marginBottom": "0"}
+                    style={"marginBottom": "0"}
                 ),
             ])
         else:
-            contenido = html.P("Sin datos", className="text-center text-muted")
+            contenido = html.P("Sin datos", className="text-center text-muted",
+                               style={"fontSize": "12px"})
 
         tarjetas.append(contenido)
 
@@ -186,7 +219,26 @@ def actualizar_boxplot(municipio, rango_periodo):
 
 
 # =========================
-# CALLBACK MAPA (filtros globales + materia)
+# CALLBACK BRECHA POR ESTRATO
+# =========================
+@dash.callback(
+    Output("grafica-brecha-estrato", "figure"),
+    Input("filtro-municipio", "value"),
+    Input("filtro-periodo-timeline", "value"),
+    Input("filtro-materia-estrato", "value")
+)
+def actualizar_estrato(municipio, rango_periodo, columna_materia):
+
+    idx_min, idx_max = rango_periodo
+    periodos_seleccionados = periodos[idx_min:idx_max + 1]
+
+    df_filtrado = filtrar_datos(df, municipio=municipio, periodo=periodos_seleccionados)
+
+    return generar_brecha_por_estrato(df_filtrado, columna_materia)
+
+
+# =========================
+# CALLBACK MAPA
 # =========================
 @dash.callback(
     Output("grafica-mapa-brecha", "figure"),
