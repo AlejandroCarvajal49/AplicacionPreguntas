@@ -1,9 +1,12 @@
 import dash
 from dash import html, dcc, Input, Output
 import dash_bootstrap_components as dbc
-import pandas as pd
 
-from Analysis.logica_p2 import cargar_datos, filtrar_datos, calcular_brechas, generar_boxplots_materias, MATERIAS
+from Analysis.logica_p2 import (
+    cargar_datos, filtrar_datos, calcular_brechas,
+    generar_boxplots_materias, generar_mapa_brecha,
+    formato_periodo, MATERIAS
+)
 
 # =========================
 # REGISTRO DE PÁGINA
@@ -21,7 +24,6 @@ df = cargar_datos()
 municipios = ["Todos"] + sorted(df["cole_mcpio_ubicacion"].dropna().unique())
 
 periodos = sorted(df["periodo"].dropna().unique())
-periodo_indices = {i: str(p) for i, p in enumerate(periodos)}
 
 # =========================
 # HELPER: Tarjeta de brecha
@@ -72,33 +74,59 @@ layout = html.Div([
                     min=0,
                     max=len(periodos) - 1,
                     step=1,
-                    marks={i: {"label": str(p), "style": {"fontSize": "12px", "transform": "rotate(-45deg)"}}
+                    marks={i: {"label": formato_periodo(p),
+                               "style": {"fontSize": "12px", "transform": "rotate(-45deg)"}}
                            for i, p in enumerate(periodos)},
                     value=[0, len(periodos) - 1],
                     tooltip={"placement": "top", "always_visible": False},
+                    allowCross=False,
                     className="mt-2"
                 )
             ], style={"padding": "10px 20px 30px 20px"})
         ], width=10)
     ], justify="center", className="mb-4"),
 
-    # ---------- GRÁFICA ----------
-    dcc.Graph(id="grafica-boxplot-brecha"),
-
-    html.Br(),
-
-    # ---------- TARJETAS DE BRECHA DEBAJO DE CADA CATEGORÍA ----------
+    # ---------- TARJETAS DE BRECHA ----------
     html.H4("Brecha Privado − Público por Materia", className="text-center mt-2 mb-3"),
     dbc.Row(
         [crear_tarjeta_brecha(nombre) for nombre in MATERIAS.keys()],
         justify="center",
-        className="mb-5"
+        className="mb-4"
     ),
+
+    # ---------- GRÁFICA BOXPLOT ----------
+    html.H4("📦 Distribución por Materia", className="text-center mt-3 mb-2"),
+    dcc.Graph(id="grafica-boxplot-brecha"),
+
+    html.Hr(),
+
+    # ---------- MAPA GEOGRÁFICO DE BRECHA ----------
+    html.H4("🗺️ Mapa de Brecha por Municipio",
+            className="text-center mt-3 mb-2"),
+    html.P("Azul = Público supera a Privado | Rojo = Privado supera a Público",
+           className="text-center text-muted", style={"fontSize": "13px"}),
+
+    dbc.Row([
+        dbc.Col([
+            html.Label("Selecciona Materia:", className="fw-bold"),
+            dcc.Dropdown(
+                id="filtro-materia-mapa",
+                options=[{"label": nombre, "value": col}
+                         for nombre, col in MATERIAS.items()],
+                value="punt_matematicas",
+                clearable=False
+            ),
+        ], width=4)
+    ], justify="center", className="mb-3"),
+
+    dcc.Graph(id="grafica-mapa-brecha"),
+
+    html.Br(),
 
 ])
 
 # =========================
-# CALLBACK
+# CALLBACK BOXPLOT + BRECHAS
 # =========================
 @dash.callback(
     Output("grafica-boxplot-brecha", "figure"),
@@ -106,22 +134,17 @@ layout = html.Div([
     Input("filtro-municipio", "value"),
     Input("filtro-periodo-timeline", "value")
 )
-def actualizar_grafica(municipio, rango_periodo):
+def actualizar_boxplot(municipio, rango_periodo):
 
-    # Convertir rango del slider a lista de periodos
     idx_min, idx_max = rango_periodo
     periodos_seleccionados = periodos[idx_min:idx_max + 1]
 
-    # Filtrar datos
     df_filtrado = filtrar_datos(df, municipio=municipio, periodo=periodos_seleccionados)
 
-    # Generar gráfica
-    fig = generar_boxplots_materias(df_filtrado)
+    fig_boxplot = generar_boxplots_materias(df_filtrado)
 
-    # Calcular brechas
     brechas = calcular_brechas(df_filtrado)
 
-    # Generar contenido de las tarjetas
     tarjetas = []
     for nombre in MATERIAS.keys():
         info = brechas.get(nombre, {})
@@ -130,12 +153,11 @@ def actualizar_grafica(municipio, rango_periodo):
         media_priv = info.get("media_privado")
 
         if brecha_val is not None:
-            # Color según si la brecha es positiva (privado > público) o negativa
             if brecha_val > 0:
-                color_brecha = "#d62728"  # rojo — privado gana
+                color_brecha = "#d62728"
                 icono = "▲"
             elif brecha_val < 0:
-                color_brecha = "#2ca02c"  # verde — público gana
+                color_brecha = "#2ca02c"
                 icono = "▼"
             else:
                 color_brecha = "#888"
@@ -160,4 +182,25 @@ def actualizar_grafica(municipio, rango_periodo):
 
         tarjetas.append(contenido)
 
-    return fig, *tarjetas
+    return fig_boxplot, *tarjetas
+
+
+# =========================
+# CALLBACK MAPA (filtros globales + materia)
+# =========================
+@dash.callback(
+    Output("grafica-mapa-brecha", "figure"),
+    Input("filtro-municipio", "value"),
+    Input("filtro-periodo-timeline", "value"),
+    Input("filtro-materia-mapa", "value")
+)
+def actualizar_mapa(municipio, rango_periodo, columna_materia):
+
+    idx_min, idx_max = rango_periodo
+    periodos_seleccionados = periodos[idx_min:idx_max + 1]
+
+    df_filtrado = filtrar_datos(df, municipio="Todos", periodo=periodos_seleccionados)
+
+    fig_mapa = generar_mapa_brecha(df_filtrado, columna_materia, municipio_seleccionado=municipio)
+
+    return fig_mapa
