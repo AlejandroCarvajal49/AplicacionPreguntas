@@ -29,5 +29,5 @@ app.layout = html.Div([
     ], fluid=True, class_name="py-3")
 ])
 
-if __name__ == '__main__':
-    app.run(debug=True, port=8050)
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=8050, debug=False)
